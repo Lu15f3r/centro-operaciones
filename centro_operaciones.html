@@ -1,0 +1,2014 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centro de Operaciones</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --sidebar:#111827; --sidebar2:#1f2937; --accent:#0d6efd;
+      --app-bg:#f4f6f9; --app-panel-bg:#eef1f5; --app-border:#e5e7eb;
+      --app-soft-bg:#f8fafc; --app-soft-bg-2:#f1f5f9; --app-muted:#64748b;
+      --app-toast-bg:#ffffff; --app-toast-border:#dee2e6;
+    }
+    [data-bs-theme="dark"] {
+      --sidebar:#0b1120; --sidebar2:#0f172a;
+      --app-bg:#0b1120; --app-panel-bg:#1e293b; --app-border:#2d3b52;
+      --app-soft-bg:#1a2436; --app-soft-bg-2:#1e293b; --app-muted:#94a3b8;
+      --app-toast-bg:#1e293b; --app-toast-border:#334155;
+    }
+    body { background:var(--app-bg); color:var(--bs-body-color); font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif; transition:background-color .15s ease,color .15s ease; }
+    h1,h2,h3,h4,h5,h6,.brand,.stat h4,.display-6 { font-family:'Plus Jakarta Sans',system-ui,-apple-system,'Segoe UI',sans-serif; letter-spacing:-.01em; }
+    .sidebar { width:260px; min-height:100vh; background:var(--sidebar); position:fixed; left:0; top:0; z-index:1030; transition:width .18s ease, box-shadow .18s ease; overflow-x:hidden; }
+    .sidebar .brand { padding:22px 16px; color:#fff; font-weight:700; font-size:1.15rem; display:flex; align-items:center; justify-content:space-between; gap:6px; }
+    .sidebar .brand .brand-label { display:flex; align-items:center; min-width:0; }
+    .sidebar .brand .brand-label span { white-space:nowrap; }
+    #sidebarPinBtn { color:#94a3b8; flex-shrink:0; }
+    #sidebarPinBtn:hover { color:#fff; }
+    .sidebar .nav-link { color:#cbd5e1; margin:3px 10px; border-radius:10px; white-space:nowrap; }
+    .sidebar .nav-link:hover,.sidebar .nav-link.active { background:var(--sidebar2); color:#fff; }
+    .main { margin-left:76px; min-height:100vh; transition:margin-left .18s ease; }
+    /* Menú lateral compacto por defecto (solo iconos, gana espacio) que se expande solo al
+       pasar el mouse por encima — sin necesidad de dar clic — y se contrae al quitarlo.
+       El contenido NO se recorre al expandir (el menú queda "flotando" encima, position:fixed).
+       El icono de chinche (📌), junto a "Centro Operativo", deja el menú siempre abierto si se prefiere. */
+    body:not(.sidebar-pinned) .sidebar { width:76px; }
+    body:not(.sidebar-pinned) .sidebar .brand-label span,
+    body:not(.sidebar-pinned) .sidebar .nav-link span { display:none; }
+    body:not(.sidebar-pinned) .sidebar:hover { width:260px; box-shadow:8px 0 28px rgba(0,0,0,.35); z-index:1040; }
+    body:not(.sidebar-pinned) .sidebar:hover .brand-label span,
+    body:not(.sidebar-pinned) .sidebar:hover .nav-link span { display:inline; }
+    body.sidebar-pinned .sidebar { width:260px; }
+    body.sidebar-pinned .main { margin-left:260px; }
+    .topbar { background:var(--bs-body-bg); border-bottom:1px solid var(--app-border); padding:14px 24px; position:sticky; top:0; z-index:1020; }
+    .card { border:0; border-radius:14px; box-shadow:0 4px 18px rgba(15,23,42,.06); }
+    .stat { min-height:112px; }
+    .stat i { font-size:1.7rem; }
+    .kanban-column { min-height:420px; background:var(--app-panel-bg); border-radius:14px; padding:12px; }
+    .task-card { cursor:grab; background:var(--bs-body-bg); border-radius:12px; padding:12px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,.06); }
+    .task-card:active { cursor:grabbing; }
+    .dropzone { border:2px dashed var(--app-border); border-radius:12px; padding:20px; text-align:center; background:var(--app-soft-bg); }
+    .attachment { border:1px solid var(--app-border); border-radius:10px; padding:10px; background:var(--bs-body-bg); }
+    #pdfViewer { width:100%; height:72vh; border:0; border-radius:10px; background:var(--app-panel-bg); }
+    .template-item { cursor:default; }
+    .template-item:hover { background:var(--app-soft-bg-2); }
+    .template-item .drag-handle { cursor:grab; color:var(--app-muted); padding-top:2px; }
+    .template-item .drag-handle:active { cursor:grabbing; }
+    .template-item.dragging { opacity:.4; }
+    .template-item.drag-over { border-top:3px solid var(--accent) !important; }
+    .drag-card { cursor:default; }
+    .drag-card .drag-handle { cursor:grab; color:var(--app-muted); font-size:.95em; }
+    .drag-card .drag-handle:active { cursor:grabbing; }
+    .drag-card.dragging { opacity:.4; }
+    .drag-card.drag-over { outline:3px solid var(--accent); outline-offset:-3px; }
+    .reminder-alert { background:var(--app-toast-bg); color:var(--bs-body-color); border:2px solid #dc3545; border-radius:12px; padding:14px 16px; box-shadow:0 8px 28px rgba(0,0,0,.3); animation:reminderPop .2s ease; }
+    @keyframes reminderPop { from{transform:translateY(12px);opacity:0} to{transform:translateY(0);opacity:1} }
+    .note-important { border-left:5px solid #dc3545; }
+    .credential-card { padding:.65rem .75rem !important; }
+    .credential-card h6 { font-size:.82rem; margin-bottom:.15rem !important; }
+    .credential-card h6 .bi-key-fill { font-size:.85rem; }
+    .credential-card .small-muted { font-size:.72rem; }
+    .credential-card .btn-group-sm .btn { padding:.15rem .4rem; font-size:.72rem; }
+    .credential-card .input-group.input-group-sm .form-control { font-size:.75rem; height:calc(1.5em + .5rem); padding:.25rem .5rem; }
+    .credential-card .input-group.input-group-sm .btn { font-size:.72rem; padding:.2rem .45rem; }
+    .credential-card .mt-3 { margin-top:.6rem !important; }
+    .credential-card .mt-2 { margin-top:.4rem !important; }
+    .extension-card { padding:.65rem .75rem !important; }
+    .extension-card h6 { font-size:.82rem; margin-bottom:0; }
+    .extension-card .display-6 { font-size:1.5rem; margin:.3rem 0 !important; }
+    .extension-card .badge { font-size:.68rem; }
+    .extension-card .small-muted { font-size:.72rem; }
+    .extension-card .btn-group-sm .btn { padding:.15rem .4rem; font-size:.72rem; }
+    .extension-card .mt-3 { margin-top:.5rem !important; }
+    .extension-card .mt-2 { margin-top:.35rem !important; }
+    .extension-card .btn.w-100 { padding:.3rem .5rem; font-size:.75rem; }
+    .credential-card .d-flex.justify-content-between,
+    .extension-card .d-flex.justify-content-between { flex-wrap:wrap; }
+    .credential-card .btn-group-sm,
+    .extension-card .btn-group-sm { flex-shrink:0; }
+    .credential-card h6, .extension-card h6 { word-break:break-word; }
+    .small-muted { font-size:.82rem; color:var(--app-muted); }
+    .quick-result { cursor:pointer; border-left:4px solid #0d6efd; }
+    .quick-result:hover { background:var(--app-soft-bg); }
+    .procedure-card,.extension-card,.quick-card { transition:.15s ease; }
+    .procedure-card:hover,.extension-card:hover,.quick-card:hover { transform:translateY(-2px); }
+    .category-pill { cursor:pointer; }
+    .global-search-wrap { max-width:560px; position:relative; }
+    .global-search-overlay { position:absolute; top:calc(100% + 8px); left:0; width:100%; min-width:420px; z-index:3000; }
+    .global-search-overlay .card { max-height:70vh; overflow:auto; }
+    /* Resalta y hace parpadear brevemente la tarjeta encontrada por el buscador global,
+       para ubicarla rápido entre muchas otras del mismo tipo (ej. varios PDF de Procedimientos). */
+    .search-hit-flash { position:relative; z-index:5; outline:3px solid var(--accent); outline-offset:2px; animation:searchHitPulse 0.9s ease-in-out 3; }
+    @keyframes searchHitPulse { 0%,100%{ background-color:transparent; } 50%{ background-color:rgba(13,110,253,.22); } }
+    .global-search-item { cursor:pointer; }
+    .global-search-item:hover { background:var(--app-soft-bg); }
+    .manual-viewer { width:100%; height:72vh; border:0; border-radius:10px; background:var(--app-panel-bg); }
+  .email-editor{min-height:300px;overflow:auto;white-space:pre-wrap}.email-editor:empty:before{content:attr(data-placeholder);color:#6c757d}.email-editor img{max-width:100%;height:auto;display:block;margin:8px 0}.email-editor:focus{box-shadow:0 0 0 .2rem rgba(13,110,253,.12);border-color:#86b7fe}
+  .note-editor{overflow:auto}.note-editor:empty:before{content:attr(data-placeholder);color:#6c757d}.note-editor:focus{box-shadow:0 0 0 .2rem rgba(13,110,253,.12);border-color:#86b7fe}
+  .note-rich-content{overflow-wrap:break-word}.note-rich-content ul,.note-rich-content ol{padding-left:1.4rem}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="brand"><div class="brand-label"><i class="bi bi-grid-1x2-fill me-2"></i><span>Centro Operativo</span></div><button type="button" id="sidebarPinBtn" class="btn btn-sm btn-link p-0" onclick="toggleSidebarPin()" title="Fijar menú abierto"><i class="bi bi-pin-angle"></i></button></div>
+  <nav class="nav flex-column">
+    <a class="nav-link active" href="#" data-section="dashboard"><i class="bi bi-speedometer2 me-2"></i><span>Inicio</span></a>
+    <a class="nav-link" href="#" data-section="correo"><i class="bi bi-envelope-paper me-2"></i><span>Correo / Plantillas</span></a>
+    <a class="nav-link" href="#" data-section="tareas"><i class="bi bi-kanban me-2"></i><span>Tablero</span></a>
+    <a class="nav-link" href="#" data-section="notas"><i class="bi bi-sticky me-2"></i><span>Notas importantes</span></a>
+    <a class="nav-link" href="#" data-section="credenciales"><i class="bi bi-key me-2"></i><span>Claves / Accesos</span></a>
+    <a class="nav-link" href="#" data-section="extensiones"><i class="bi bi-telephone me-2"></i><span>Extensiones</span></a>
+    <a class="nav-link" href="#" data-section="procedimientos"><i class="bi bi-journal-text me-2"></i><span>Procedimientos</span></a>
+    <a class="nav-link" href="#" data-section="responsables"><i class="bi bi-person-badge me-2"></i><span>Responsables</span></a>
+    <a class="nav-link" href="#" data-section="cadenas"><i class="bi bi-diagram-3 me-2"></i><span>Cadena de llamadas</span></a>
+    <a class="nav-link" href="#" data-section="instaladores"><i class="bi bi-hdd-stack me-2"></i><span>Instaladores</span></a>
+  </nav>
+</aside>
+
+<main class="main">
+  <header class="topbar d-flex justify-content-between align-items-center">
+    <div>
+      <h5 class="mb-0" id="pageTitle">Inicio</h5>
+      <div class="small-muted">Panel local de trabajo</div>
+    </div>
+    <div class="global-search-wrap flex-grow-1 mx-4 d-none d-lg-block">
+      <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input id="globalSearch" class="form-control" autocomplete="off" placeholder="Buscar en todo: PAC, MRA, AWS, manual, extensión..." oninput="globalSearch(this.value)" onfocus="globalSearch(this.value)">
+      </div>
+      <div id="globalSearchOverlay" class="global-search-overlay d-none">
+        <div class="card p-2 shadow-lg">
+          <div class="d-flex justify-content-between align-items-center px-2 pt-1 pb-2">
+            <small class="text-secondary">Resultados en todas las secciones</small>
+            <button type="button" class="btn-close" aria-label="Cerrar" onclick="closeGlobalSearch()"></button>
+          </div>
+          <div id="globalSearchOverlayResults" class="row g-2 px-2 pb-2"></div>
+        </div>
+      </div>
+    </div>
+    <div class="d-flex gap-2">
+      <button class="btn btn-outline-secondary btn-sm" id="themeToggleBtn" onclick="toggleTheme()" title="Cambiar tema"><i class="bi bi-moon-stars"></i></button>
+      <button class="btn btn-outline-secondary btn-sm" onclick="exportData()"><i class="bi bi-download"></i> Exportar</button>
+      <label class="btn btn-outline-secondary btn-sm mb-0">
+        <i class="bi bi-upload"></i> Importar
+        <input id="importFileInput" type="file" accept="application/json,.json" hidden>
+      </label>
+      <button class="btn btn-primary btn-sm" onclick="newDraft()"><i class="bi bi-plus-lg"></i> Nuevo correo</button>
+    </div>
+  </header>
+
+  <button type="button" id="globalSearchFab" class="btn btn-primary rounded-circle shadow" title="Buscar en todo (Ctrl+K) — funciona en cualquier sección" onclick="openGlobalSearchModal()" style="position:fixed;left:24px;bottom:24px;width:54px;height:54px;z-index:100000;">
+    <i class="bi bi-search fs-5"></i>
+  </button>
+
+  <div class="modal fade" id="globalSearchModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content">
+      <div class="modal-header">
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input id="globalSearchModalInput" class="form-control" autocomplete="off" placeholder="Buscar en todo: PAC, MRA, AWS, manual, extensión..." oninput="globalSearchInModal(this.value)">
+        </div>
+        <button class="btn-close ms-2" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="globalSearchModalResults" class="row g-2"><div class="col-12 py-3 text-secondary">Escribe para buscar en correo, tareas, notas, claves, procedimientos, responsables y cadenas — sin importar en qué sección estés.</div></div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="container-fluid p-4">
+
+    <!-- DASHBOARD -->
+    <section id="dashboard" class="app-section">
+      <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="card stat p-3"><div class="small-muted">Plantillas</div><div class="d-flex justify-content-between align-items-center"><h2 id="statTemplates">0</h2><i class="bi bi-file-earmark-text text-primary"></i></div></div></div>
+        <div class="col-md-3"><div class="card stat p-3"><div class="small-muted">Borradores</div><div class="d-flex justify-content-between align-items-center"><h2 id="statDrafts">0</h2><i class="bi bi-envelope text-warning"></i></div></div></div>
+        <div class="col-md-3"><div class="card stat p-3"><div class="small-muted">Pendientes</div><div class="d-flex justify-content-between align-items-center"><h2 id="statPending">0</h2><i class="bi bi-hourglass-split text-danger"></i></div></div></div>
+        <div class="col-md-3"><div class="card stat p-3"><div class="small-muted">En proceso</div><div class="d-flex justify-content-between align-items-center"><h2 id="statProcess">0</h2><i class="bi bi-arrow-repeat text-primary"></i></div></div></div>
+        <div class="col-md-3"><div class="card stat p-3"><div class="small-muted">Completadas</div><div class="d-flex justify-content-between align-items-center"><h2 id="statDone">0</h2><i class="bi bi-check2-circle text-success"></i></div></div></div>
+      </div>
+      <div class="row g-4">
+        <div class="col-lg-7">
+          <div class="card p-4">
+            <div class="d-flex justify-content-between mb-3">
+              <h5 class="mb-0">Accesos rápidos</h5>
+              <span class="badge text-bg-light">Guardado automático</span>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-4"><button class="btn btn-outline-primary w-100 py-3" onclick="newDraft()"><i class="bi bi-envelope-plus d-block fs-3"></i>Nuevo correo</button></div>
+              <div class="col-md-4"><button class="btn btn-outline-success w-100 py-3" onclick="showSection('tareas')"><i class="bi bi-kanban d-block fs-3"></i>Ver tareas</button></div>
+              <div class="col-md-4"><button class="btn btn-outline-warning w-100 py-3" onclick="showSection('notas')"><i class="bi bi-sticky d-block fs-3"></i>Notas</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-5">
+          <div class="card p-4">
+            <h5>Importante</h5>
+            <p class="small-muted mb-0">Esta versión guarda los datos en el navegador mediante almacenamiento local. Para contraseñas, tokens y accesos críticos, conviene usar un gestor de secretos o una aplicación con autenticación, no un HTML estático.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card p-4 mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <div><h5 class="mb-1">🔄 Tareas en proceso</h5><div class="small-muted">Las tareas que estén en “En proceso” aparecerán aquí automáticamente.</div></div>
+          <button class="btn btn-outline-primary btn-sm" onclick="showSection('tareas')">Ver tablero completo</button>
+        </div>
+        <div id="dashboardProcessList" class="row g-3"></div>
+      </div>
+    </section>
+
+    <!-- CORREO -->
+    <section id="correo" class="app-section d-none">
+      <div class="row g-4">
+        <div class="col-xl-4">
+          <div class="card">
+            <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
+              <h5 class="mb-0">Plantillas y borradores</h5>
+              <button class="btn btn-sm btn-primary" onclick="newTemplate()"><i class="bi bi-plus"></i></button>
+            </div>
+            <div class="p-3">
+              <input id="templateSearch" class="form-control form-control-sm" placeholder="Buscar..." oninput="renderTemplates()">
+            </div>
+            <div id="templateList" class="list-group list-group-flush"></div>
+          </div>
+        </div>
+
+        <div class="col-xl-8">
+          <div class="card p-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+              <div>
+                <h5 class="mb-0">Editor de correo</h5>
+                <div id="saveStatus" class="small-muted">Borrador nuevo</div>
+              </div>
+              <div class="btn-group">
+                <button class="btn btn-outline-primary btn-sm" onclick="copyEmailField('to')"><i class="bi bi-copy"></i> Copiar Para</button>
+                <button class="btn btn-outline-primary btn-sm" onclick="copyEmailField('cc')"><i class="bi bi-copy"></i> Copiar CC</button>
+                <button class="btn btn-outline-secondary btn-sm" onclick="saveCurrentDraft()"><i class="bi bi-save"></i> Guardar</button>
+                <button class="btn btn-outline-danger btn-sm" onclick="deleteCurrentDraft()"><i class="bi bi-trash"></i></button>
+              </div>
+            </div>
+
+            <input type="hidden" id="draftId">
+            <div class="row g-2">
+              <div class="col-12"><label class="form-label">Para</label><input id="to" class="form-control" placeholder="correo@empresa.com"></div>
+              <div class="col-md-6"><label class="form-label">Copia (CC)</label><input id="cc" class="form-control" placeholder="correo1@empresa.com, correo2@empresa.com"></div>
+              <div class="col-md-6"><label class="form-label">Título del borrador</label><input id="draftTitle" class="form-control" placeholder="Ej. Reporte falla PAC estación X"></div>
+              <div class="col-md-6"><label class="form-label">Asunto del correo</label><input id="subject" class="form-control" placeholder="Asunto que recibirá el destinatario"></div>
+              <div class="col-12">
+                <label class="form-label">Mensaje</label>
+                <div class="btn-toolbar mb-2" role="toolbar">
+                  <button class="btn btn-sm btn-outline-secondary" onclick="insertText('**texto importante**')"><b>B</b></button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="insertText('![imagen](URL_DE_IMAGEN)')"><i class="bi bi-image"></i></button>
+                  <button class="btn btn-sm btn-outline-secondary" onclick="insertText('[enlace](https://...)')"><i class="bi bi-link-45deg"></i></button>
+                </div>
+                <div id="body" class="form-control email-editor" contenteditable="true" data-placeholder="Escribe el correo... Puedes pegar o arrastrar imágenes aquí."></div>
+              </div>
+            </div>
+
+            <hr>
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">Adjuntos</h6>
+              <label class="btn btn-sm btn-outline-primary mb-0">
+                <i class="bi bi-paperclip"></i> Agregar archivos
+                <input id="fileInput" type="file" multiple hidden accept=".pdf,.xlsx,.xls,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv">
+              </label>
+            </div>
+            <div class="small-muted mb-2">PDF, Excel, Word e imágenes. Los archivos se guardan localmente en este navegador.</div>
+            <div id="attachmentList" class="row g-2"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISOR FIJO -->
+      <div class="card p-3 mt-4" id="previewCard">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="mb-0"><i class="bi bi-eye"></i> Vista previa del archivo</h6>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-primary d-none" id="previewOpenTabBtn" onclick="window.open(window._currentPreviewFile?.url,'_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir en pestaña</button>
+            <button class="btn btn-sm btn-outline-primary d-none" id="previewDownloadBtn" onclick="downloadCurrentPreview()"><i class="bi bi-download"></i> Descargar</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="clearPreview()">Cerrar</button>
+          </div>
+        </div>
+        <div id="previewEmpty" class="text-center text-secondary p-5">Selecciona un PDF o una imagen en los adjuntos para verla aquí.</div>
+        <iframe id="pdfViewer" class="d-none"></iframe>
+        <img id="imageViewer" class="d-none img-fluid rounded mx-auto d-block" style="max-height:72vh" alt="Vista previa">
+      </div>
+    </section>
+
+    <!-- TAREAS -->
+    <section id="tareas" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <div><h5 class="mb-1">Tablero de tareas</h5><div class="small-muted">Arrastra las tarjetas entre columnas.</div></div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" id="notifPermBtn" onclick="requestNotifPermission()"><i class="bi bi-bell"></i> Activar notificaciones</button>
+            <button class="btn btn-outline-secondary" onclick="testNotification()"><i class="bi bi-send-check"></i> Probar aviso</button>
+            <button class="btn btn-primary" onclick="addTask()"><i class="bi bi-plus-lg"></i> Nueva tarea</button>
+          </div>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-lg-4"><div class="kanban-column" data-status="pendiente"><h6>📌 Pendientes <span class="badge text-bg-secondary" id="countPendiente">0</span></h6><div id="colPendiente"></div></div></div>
+        <div class="col-lg-4"><div class="kanban-column" data-status="proceso"><h6>🔄 En proceso <span class="badge text-bg-primary" id="countProceso">0</span></h6><div id="colProceso"></div></div></div>
+        <div class="col-lg-4"><div class="kanban-column" data-status="hecho"><h6>✅ Hechas <span class="badge text-bg-success" id="countHecho">0</span></h6><div id="colHecho"></div></div></div>
+      </div>
+    </section>
+
+    <!-- NOTAS -->
+    <section id="notas" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <div><h5 class="mb-1">Notas importantes</h5><div class="small-muted">Organiza información de operación, procedimientos y recordatorios.</div></div>
+          <button class="btn btn-warning" onclick="addNote()"><i class="bi bi-plus-lg"></i> Nueva nota</button>
+        </div>
+      </div>
+      <div id="notesGrid" class="row g-3"></div>
+    </section>
+
+    <!-- CREDENCIALES -->
+    <section id="credenciales" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-1"><i class="bi bi-key-fill text-warning"></i> Claves y accesos</h5>
+            <div class="small-muted">Cada sistema tiene su clave separada. Usa <strong>Copiar</strong> para copiar únicamente la contraseña.</div>
+          </div>
+          <button class="btn btn-warning" onclick="addCredential()"><i class="bi bi-plus-lg"></i> Nueva clave</button>
+        </div>
+      </div>
+
+      <div class="alert alert-warning">
+        <i class="bi bi-shield-lock"></i>
+        <strong>Importante:</strong> esta versión guarda las claves en el navegador mediante <code>localStorage</code>. Es práctica para un equipo personal, pero no equivale a un gestor de contraseñas profesional.
+      </div>
+
+      <div id="credentialsGrid" class="row g-3"></div>
+    </section>
+
+    <!-- EXTENSIONES -->
+    <section id="extensiones" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div><h5 class="mb-1">☎️ Extensiones</h5><div class="small-muted">Números de soporte y contactos rápidos.</div></div>
+          <button class="btn btn-primary" onclick="addExtension()"><i class="bi bi-plus-lg"></i> Nueva extensión</button>
+        </div>
+      </div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-8"><input id="extensionSearch" class="form-control" placeholder="Buscar extensión..." oninput="renderExtensions()"></div>
+        <div class="col-md-4"><select id="extensionCategory" class="form-select" onchange="renderExtensions()">
+<option value="">Todas</option>
+<option value="PDV">PDV</option>
+<option value="PAC">PAC</option>
+<option value="GMP">GMP</option>
+<option value="ESTACIONES">ESTACIONES</option>
+<option value="INFRAESTRUCTURA">INFRAESTRUCTURA</option>
+<option value="RED">RED</option>
+<option value="INTERFONÍA">INTERFONÍA</option>
+<option value="OTROS">OTROS</option>
+</select></div>
+      </div>
+      <div id="extensionsGrid" class="row g-3"></div>
+    </section>
+
+    <!-- PROCEDIMIENTOS -->
+    <section id="procedimientos" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div><h5 class="mb-1">📚 Procedimientos</h5><div class="small-muted">Cada procedimiento contiene solamente un nombre y su PDF.</div></div>
+          <button class="btn btn-primary" onclick="addProcedure()"><i class="bi bi-plus-lg"></i> Nuevo procedimiento</button>
+        </div>
+      </div>
+      <div class="row g-3 mb-3"><div class="col-md-8"><input id="procedureSearch" class="form-control" placeholder="Buscar procedimiento..." oninput="renderProcedures()"></div></div>
+      <div id="proceduresGrid" class="row g-3"></div>
+      <div class="card p-3 mt-4 d-none" id="manualPreviewCard">
+        <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">👁 PDF del procedimiento</h6><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-primary" onclick="window.open(manualViewer.src,'_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir en pestaña</button><button class="btn btn-sm btn-outline-primary" id="manualDownloadBtn" onclick="downloadDataUrl(manualViewer.src,window._currentManualName)"><i class="bi bi-download"></i> Descargar</button><button class="btn btn-sm btn-outline-secondary" onclick="closeManualPreview()">Cerrar</button></div></div>
+        <iframe id="manualViewer" class="manual-viewer"></iframe>
+      </div>
+    </section>
+
+    <!-- RESPONSABLES -->
+    <section id="responsables" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div><h5 class="mb-1">👤 Responsables</h5><div class="small-muted">Registra manualmente los tres datos del responsable.</div></div>
+          <button class="btn btn-primary" onclick="addResponsible()"><i class="bi bi-plus-lg"></i> Nuevo responsable</button>
+        </div>
+      </div>
+      <div class="row g-3 mb-3"><div class="col-md-8"><input id="responsibleSearch" class="form-control" placeholder="Buscar por código, nombre o equipo..." oninput="renderResponsibles()"></div></div>
+      <div id="responsiblesGrid" class="row g-3"></div>
+    </section>
+
+    <!-- CADENA DE LLAMADAS -->
+    <section id="cadenas" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div><h5 class="mb-1">📞 Cadena de llamadas</h5><div class="small-muted">Cada cadena contiene solamente un nombre y su PDF.</div></div>
+          <button class="btn btn-primary" onclick="addChain()"><i class="bi bi-plus-lg"></i> Nueva cadena</button>
+        </div>
+      </div>
+      <div class="row g-3 mb-3"><div class="col-md-8"><input id="chainSearch" class="form-control" placeholder="Buscar cadena..." oninput="renderChains()"></div></div>
+      <div id="chainsGrid" class="row g-3"></div>
+      <div class="card p-3 mt-4 d-none" id="chainPreviewCard">
+        <div class="d-flex justify-content-between align-items-center mb-2"><h6 class="mb-0">👁 PDF de la cadena</h6><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-primary" onclick="window.open(chainViewer.src,'_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir en pestaña</button><button class="btn btn-sm btn-outline-primary" onclick="downloadDataUrl(chainViewer.src,window._currentChainName)"><i class="bi bi-download"></i> Descargar</button><button class="btn btn-sm btn-outline-secondary" onclick="closeChainPreview()">Cerrar</button></div></div>
+        <iframe id="chainViewer" class="manual-viewer"></iframe>
+      </div>
+    </section>
+
+    <!-- INSTALADORES -->
+    <section id="instaladores" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h5 class="mb-1"><i class="bi bi-hdd-stack text-primary"></i> Banco de instaladores</h5>
+            <div class="small-muted">Sube carpetas completas de instaladores, o archivos/ZIP sueltos. Se guardan en este navegador, organizados por paquete.</div>
+          </div>
+          <div class="d-flex gap-2 flex-wrap">
+            <label class="btn btn-primary mb-0">
+              <i class="bi bi-folder-plus"></i> Subir carpeta
+              <input id="installerFolderInput" type="file" webkitdirectory directory multiple hidden>
+            </label>
+            <label class="btn btn-outline-primary mb-0">
+              <i class="bi bi-file-earmark-zip"></i> Subir archivos / ZIP
+              <input id="installerFilesInput" type="file" multiple hidden>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="alert alert-info d-flex align-items-start gap-2">
+        <i class="bi bi-info-circle mt-1"></i>
+        <div>
+          <strong>Cómo se organiza:</strong> si subes una <strong>carpeta</strong>, se guarda como un paquete con el mismo nombre de esa carpeta. Si subes archivos sueltos o un <strong>.zip</strong>, te pedimos un nombre de paquete antes de guardarlos (el .zip se guarda completo, sin descomprimir).
+          <div class="mt-1 small-muted">Nota: por su tamaño, los instaladores no se incluyen en el respaldo (Exportar/Importar); quedan guardados aparte, solo en este navegador.</div>
+        </div>
+      </div>
+      <div class="row g-3 mb-3 align-items-center">
+        <div class="col-md-8"><input id="installerSearch" class="form-control" placeholder="Buscar paquete o archivo..." oninput="renderInstallers()"></div>
+        <div class="col-md-4 text-md-end small-muted" id="installerTotalSize"></div>
+      </div>
+      <div id="installersGrid" class="row g-3"></div>
+    </section>
+  </div>
+</main>
+
+<!-- MODAL EXTENSION -->
+<div class="modal fade" id="extensionModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="extensionModalTitle">Nueva extensión</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="extensionId">
+      <input id="extensionName" class="form-control mb-2" placeholder="Nombre / servicio">
+      <input id="extensionNumber" class="form-control mb-2" placeholder="Extensión / número">
+      <select id="extensionCategoryInput" class="form-select mb-2"><option>Soporte</option><option>MRA</option><option>PAC</option><option>Infraestructura</option><option>Otros</option></select>
+      <textarea id="extensionNote" class="form-control" rows="3" placeholder="Nota"></textarea>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveExtension()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL VISTA PREVIA ANTES DE SUBIR ADJUNTOS -->
+<div class="modal fade" id="attachStageModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Confirmar adjuntos</h5><button class="btn-close" data-bs-dismiss="modal" onclick="cancelStagedFiles()"></button></div>
+    <div class="modal-body">
+      <div class="small-muted mb-2">Revisa que sean los archivos correctos antes de subirlos.</div>
+      <div id="attachStageList" class="d-flex flex-column gap-2"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelStagedFiles()">Cancelar</button>
+      <button class="btn btn-primary" id="attachStageConfirmBtn" onclick="confirmStagedFiles()">Subir</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- MODAL VISTA PREVIA ANTES DE SUBIR INSTALADORES -->
+<div class="modal fade" id="installerStageModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Confirmar instaladores</h5><button class="btn-close" data-bs-dismiss="modal" onclick="cancelStagedInstallers()"></button></div>
+    <div class="modal-body">
+      <label class="form-label">Nombre del paquete</label>
+      <input id="installerPackageName" class="form-control mb-3" placeholder="Ej. Impresoras Epson">
+      <div class="small-muted mb-2">Revisa que sean los archivos correctos antes de guardarlos.</div>
+      <div id="installerStageList" class="d-flex flex-column gap-2" style="max-height:320px;overflow:auto;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelStagedInstallers()">Cancelar</button>
+      <button class="btn btn-primary" id="installerStageConfirmBtn" onclick="confirmStagedInstallers()">Guardar</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- MODAL PLANTILLA -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Nueva plantilla</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body"><label class="form-label">Nombre de la plantilla</label><input id="templateName" class="form-control" placeholder="Ej. Reporte de falla"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveTemplate()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL PROCEDIMIENTO -->
+<div class="modal fade" id="procedureModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="procedureModalTitle" class="modal-title">Nuevo procedimiento</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="procedureId">
+      <label class="form-label">Nombre del procedimiento</label>
+      <input id="procedureName" class="form-control mb-3" placeholder="Ej. PAC sin internet">
+      <label class="form-label">Subir PDF</label>
+      <input id="procedurePdf" type="file" class="form-control" accept="application/pdf,.pdf">
+      <div id="procedureCurrentFile" class="small-muted mt-2"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveProcedure()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL RESPONSABLE -->
+<div class="modal fade" id="responsibleModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="responsibleModalTitle" class="modal-title">Nuevo responsable</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="responsibleId">
+      <label class="form-label">Código responsable</label><input id="responsibleCode" class="form-control mb-3" placeholder="Código responsable">
+      <label class="form-label">Nombre responsable</label><input id="responsibleName" class="form-control mb-3" placeholder="Nombre responsable">
+      <label class="form-label">Equipo</label><input id="responsibleTeam" class="form-control" placeholder="Equipo">
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveResponsible()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL CADENA -->
+<div class="modal fade" id="chainModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="chainModalTitle" class="modal-title">Nueva cadena de llamadas</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="chainId">
+      <label class="form-label">Nombre de la cadena</label><input id="chainName" class="form-control mb-3" placeholder="Nombre de la cadena">
+      <label class="form-label">Subir PDF</label><input id="chainPdf" type="file" class="form-control" accept="application/pdf,.pdf">
+      <div id="chainCurrentFile" class="small-muted mt-2"></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveChain()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL CREDENCIAL -->
+<div class="modal fade" id="credentialModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="credentialModalTitle">Nueva clave</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="credentialId">
+      <label class="form-label">Aplicativo / Sistema</label>
+      <input id="credentialName" class="form-control mb-2" placeholder="Ej. AWS">
+      <label class="form-label">Usuario</label>
+      <input id="credentialUser" class="form-control mb-2" placeholder="Usuario">
+      <label class="form-label">Contraseña / Clave</label>
+      <div class="input-group mb-2">
+        <input id="credentialPassword" type="password" class="form-control" placeholder="Contraseña">
+        <button class="btn btn-outline-secondary" type="button" onclick="toggleCredentialPassword()"><i class="bi bi-eye"></i></button>
+      </div>
+      <label class="form-label">Nota</label>
+      <textarea id="credentialNote" class="form-control" rows="3" placeholder="Ej. acceso remoto, administrador, etc."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+      <button class="btn btn-warning" onclick="saveCredential()">Guardar</button>
+    </div>
+  </div></div>
+</div>
+
+<!-- MODAL TAREA -->
+<div class="modal fade" id="taskModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="taskModalTitle" class="modal-title">Nueva tarea</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="taskId">
+      <input id="taskTitle" class="form-control mb-2" placeholder="Título">
+      <textarea id="taskDesc" class="form-control mb-2" rows="4" placeholder="Descripción / seguimiento"></textarea>
+      <label class="form-label small-muted mb-1"><i class="bi bi-alarm"></i> Hora para hacer esta actividad (opcional)</label>
+      <div class="input-group">
+        <input type="datetime-local" id="taskDueAt" class="form-control">
+        <button type="button" class="btn btn-outline-secondary" onclick="document.getElementById('taskDueAt').value=''" title="Quitar hora"><i class="bi bi-x-lg"></i></button>
+      </div>
+      <div class="small-muted mt-1">Si la programas, te avisaremos con una alerta en pantalla a esa hora (mientras esta pestaña siga abierta en tu navegador).</div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveTask()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL NOTA -->
+<div class="modal fade" id="noteModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Nota importante</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="noteId">
+      <input id="noteTitle" class="form-control mb-2" placeholder="Título">
+      <div class="btn-toolbar mb-2 gap-1 flex-wrap" role="toolbar">
+        <div class="btn-group btn-group-sm me-1">
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('bold')" title="Negrita"><i class="bi bi-type-bold"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('italic')" title="Cursiva"><i class="bi bi-type-italic"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('underline')" title="Subrayado"><i class="bi bi-type-underline"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('strikeThrough')" title="Tachado"><i class="bi bi-type-strikethrough"></i></button>
+        </div>
+        <select class="form-select form-select-sm me-1" style="width:auto" onmousedown="event.stopPropagation()" onchange="noteExec('fontName',this.value)" title="Tipo de letra">
+          <option value="">Fuente</option>
+          <option value="Arial">Arial</option>
+          <option value="Georgia">Georgia</option>
+          <option value="'Courier New'">Courier New</option>
+          <option value="Verdana">Verdana</option>
+          <option value="'Plus Jakarta Sans'">Plus Jakarta Sans</option>
+        </select>
+        <select class="form-select form-select-sm me-1" style="width:auto" onmousedown="event.stopPropagation()" onchange="noteExec('fontSize',this.value)" title="Tamaño de letra">
+          <option value="">Tamaño</option>
+          <option value="1">Muy pequeño</option>
+          <option value="2">Pequeño</option>
+          <option value="3">Normal</option>
+          <option value="4">Mediano</option>
+          <option value="5">Grande</option>
+          <option value="6">Muy grande</option>
+          <option value="7">Enorme</option>
+        </select>
+        <div class="btn-group btn-group-sm me-1">
+          <label class="btn btn-outline-secondary mb-0 d-flex align-items-center gap-1" title="Color de texto"><i class="bi bi-palette"></i><input type="color" style="width:20px;height:20px;padding:0;border:none;background:none;" onmousedown="event.stopPropagation()" oninput="noteExec('foreColor',this.value)"></label>
+          <label class="btn btn-outline-secondary mb-0 d-flex align-items-center gap-1" title="Resaltado"><i class="bi bi-highlighter"></i><input type="color" value="#fff59d" style="width:20px;height:20px;padding:0;border:none;background:none;" onmousedown="event.stopPropagation()" oninput="noteExec('hiliteColor',this.value)"></label>
+        </div>
+        <div class="btn-group btn-group-sm me-1">
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('insertUnorderedList')" title="Lista"><i class="bi bi-list-ul"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('insertOrderedList')" title="Lista numerada"><i class="bi bi-list-ol"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('justifyLeft')" title="Alinear izquierda"><i class="bi bi-text-left"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('justifyCenter')" title="Centrar"><i class="bi bi-text-center"></i></button>
+          <button type="button" class="btn btn-outline-secondary" onmousedown="event.preventDefault()" onclick="noteExec('justifyRight')" title="Alinear derecha"><i class="bi bi-text-right"></i></button>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-danger" onmousedown="event.preventDefault()" onclick="noteExec('removeFormat')" title="Quitar formato"><i class="bi bi-eraser"></i></button>
+      </div>
+      <div id="noteText" class="form-control note-editor" contenteditable="true" style="min-height:180px;" data-placeholder="Contenido"></div>
+      <div class="form-check mt-2"><input id="noteImportant" class="form-check-input" type="checkbox" checked><label class="form-check-label">Marcar como importante</label></div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-warning" onclick="saveNote()">Guardar</button></div>
+  </div></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script></script>
+<script>
+document.addEventListener('keydown',function(e){
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){
+    e.preventDefault();
+    const s=document.getElementById('globalSearch');
+    if(s){s.focus();s.select();}
+  }
+  if(e.key==='Escape')closeGlobalSearch();
+});
+// Las tarjetas (notas, claves, extensiones, procedimientos, responsables, cadenas y plantillas)
+// solo deben poder arrastrarse tomándolas del icono ⣿, no desde cualquier punto. Antes tenían
+// draggable="true" en toda la tarjeta, lo que en varios navegadores bloquea la selección de texto
+// con el mouse (el navegador interpreta el intento de seleccionar texto como un intento de arrastre).
+// Ahora se activa "draggable" solo mientras se sostiene el icono, y se desactiva apenas se suelta.
+document.addEventListener('mousedown',function(e){
+  const handle=e.target.closest('.drag-handle');
+  if(!handle)return;
+  const card=handle.closest('.drag-card, .template-item');
+  if(card)card.setAttribute('draggable','true');
+});
+document.addEventListener('dragend',function(e){
+  const card=e.target.closest && e.target.closest('.drag-card, .template-item');
+  if(card)card.setAttribute('draggable','false');
+});
+document.addEventListener('mouseup',function(){
+  document.querySelectorAll('.drag-card[draggable="true"], .template-item[draggable="true"]').forEach(el=>el.setAttribute('draggable','false'));
+});
+document.addEventListener('click',function(e){
+  const overlay=document.getElementById('globalSearchOverlay');
+  const wrap=document.querySelector('.global-search-wrap');
+  if(!overlay||overlay.classList.contains('d-none'))return;
+  if(overlay.contains(e.target)||wrap?.contains(e.target))return;
+  closeGlobalSearch();
+});
+window.globalSearchShortcut=true;
+function emailBodyPasteHandler(e){const ed=e.currentTarget,cd=e.clipboardData;if(!cd)return;const item=Array.from(cd.items||[]).find(i=>i.kind==='file'&&i.type.startsWith('image/'));if(!item)return;e.preventDefault();const f=item.getAsFile();if(!f)return;const r=new FileReader();r.onload=()=>{const img=document.createElement('img');img.src=r.result;img.style.maxWidth='100%';img.style.height='auto';img.style.display='block';img.style.margin='8px 0';const sel=window.getSelection();if(sel&&sel.rangeCount){const range=sel.getRangeAt(0);range.deleteContents();range.insertNode(img);range.setStartAfter(img);range.collapse(true);sel.removeAllRanges();sel.addRange(range);}else ed.appendChild(img);ed.dispatchEvent(new Event('input',{bubbles:true}));};r.readAsDataURL(f);}
+document.addEventListener('DOMContentLoaded',()=>{const ed=document.querySelector('[contenteditable="true"]');if(ed){ed.addEventListener('paste',emailBodyPasteHandler);ed.addEventListener('dragover',e=>{if(Array.from(e.dataTransfer?.items||[]).some(i=>i.type?.startsWith('image/')))e.preventDefault();});ed.addEventListener('drop',e=>{const f=Array.from(e.dataTransfer?.files||[]).find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();const r=new FileReader();r.onload=()=>{const img=document.createElement('img');img.src=r.result;img.style.maxWidth='100%';img.style.height='auto';img.style.display='block';img.style.margin='8px 0';const sel=window.getSelection();if(sel?.rangeCount){const range=sel.getRangeAt(0);range.deleteContents();range.insertNode(img);range.setStartAfter(img);range.collapse(true);sel.removeAllRanges();sel.addRange(range);}else ed.appendChild(img);ed.dispatchEvent(new Event('input',{bubbles:true}));};r.readAsDataURL(f);});}});
+</script>
+<script>
+const DB_NAME='CentroOperacionesDB', DB_VERSION=4, STORE='attachments', INSTALLERS_STORE='installers';
+let db, currentAttachments=[], currentPreviewUrl=null;
+
+const state = {
+  templates: JSON.parse(localStorage.getItem('co_templates') || '[]'),
+  drafts: JSON.parse(localStorage.getItem('co_drafts') || '[]'),
+  tasks: JSON.parse(localStorage.getItem('co_tasks') || '[]'),
+  notes: JSON.parse(localStorage.getItem('co_notes') || '[]'),
+  itemOrder: JSON.parse(localStorage.getItem('co_item_order') || '[]') // orden manual de Plantillas y borradores
+};
+
+function persist(){
+  localStorage.setItem('co_templates', JSON.stringify(state.templates));
+  localStorage.setItem('co_drafts', JSON.stringify(state.drafts));
+  localStorage.setItem('co_tasks', JSON.stringify(state.tasks));
+  localStorage.setItem('co_notes', JSON.stringify(state.notes));
+  localStorage.setItem('co_item_order', JSON.stringify(state.itemOrder||[]));
+  updateStats();
+}
+function id(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+// Algunos navegadores/dispositivos (común en móviles, WhatsApp, Drive) no informan el tipo MIME
+// real del archivo. Si eso pasa con un PDF o imagen, el archivo SÍ se guarda pero el visor
+// queda en blanco porque el dataURL no dice "application/pdf". Esto lo corrige.
+function inferMimeType(file){
+  if(file.type)return file.type;
+  const n=(file.name||'').toLowerCase();
+  if(n.endsWith('.pdf'))return 'application/pdf';
+  if(n.endsWith('.png'))return 'image/png';
+  if(/\.(jpe?g)$/.test(n))return 'image/jpeg';
+  if(n.endsWith('.gif'))return 'image/gif';
+  if(n.endsWith('.webp'))return 'image/webp';
+  return '';
+}
+// Convierte un dataURL (base64) guardado en IndexedDB a un Blob y luego a una URL "blob:".
+// Motivo del arreglo: algunos PDF (normalmente los más pesados) se guardaban y se podían
+// descargar bien, pero el visor (iframe con src="data:...;base64,...") los mostraba en blanco.
+// Esto pasa porque varios navegadores limitan el tamaño de las URLs "data:" que se pueden
+// mostrar/navegar dentro de un iframe, mientras que una URL "blob:" no tiene ese límite práctico.
+// Por eso ahora todo lo que se visualiza (PDF de procedimientos, cadenas y adjuntos de correo)
+// pasa primero por esta función, y solo se usa el dataURL original como respaldo si algo falla.
+function dataUrlToBlob(dataUrl,filename){
+  try{
+    const match=/^data:([^;,]*)(;[^,]*)?,(.*)$/s.exec(dataUrl||'');
+    if(!match)return null;
+    let mime=match[1]||'';
+    // Si el tipo viene vacío o genérico, se corrige por la extensión del archivo (mismo criterio
+    // usado al guardar en inferMimeType), para que el navegador sepa qué visor usar.
+    if(!mime||/^application\/octet-stream$/i.test(mime)){
+      const n=(filename||'').toLowerCase();
+      if(n.endsWith('.pdf'))mime='application/pdf';
+      else if(n.endsWith('.png'))mime='image/png';
+      else if(/\.(jpe?g)$/.test(n))mime='image/jpeg';
+      else if(n.endsWith('.gif'))mime='image/gif';
+      else if(n.endsWith('.webp'))mime='image/webp';
+      else mime=mime||'application/octet-stream';
+    }
+    const isBase64=/;base64/i.test(match[2]||'');
+    let bytes;
+    if(isBase64){
+      const binary=atob(match[3]);
+      bytes=new Uint8Array(binary.length);
+      for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);
+    } else {
+      bytes=new TextEncoder().encode(decodeURIComponent(match[3]));
+    }
+    return new Blob([bytes],{type:mime});
+  }catch(err){console.error('dataUrlToBlob:',err);return null;}
+}
+function toViewableUrl(dataUrl,filename){
+  const blob=dataUrlToBlob(dataUrl,filename);
+  return blob?URL.createObjectURL(blob):dataUrl;
+}
+function fileToDataURL(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      let result=reader.result||'';
+      const comma=result.indexOf(',');
+      if(!result||comma===-1||comma===result.length-1){reject(new Error('El archivo se leyó vacío o dañado'));return;}
+      const realType=inferMimeType(file);
+      // Si el dataURL viene sin tipo (o con uno genérico) pero sabemos el tipo real, se reescribe el encabezado.
+      if(realType&&/^data:(;|application\/octet-stream;)/i.test(result)){
+        result='data:'+realType+';base64,'+result.slice(comma+1);
+      }
+      resolve(result);
+    };
+    reader.onerror=()=>reject(reader.error||new Error('No se pudo leer el archivo'));
+    reader.readAsDataURL(file);
+  });
+}
+function initDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,DB_VERSION);
+    req.onupgradeneeded=e=>{
+      const database=e.target.result;
+      if(!database.objectStoreNames.contains(STORE)) database.createObjectStore(STORE,{keyPath:'id'});
+      if(!database.objectStoreNames.contains(INSTALLERS_STORE)) database.createObjectStore(INSTALLERS_STORE,{keyPath:'id'});
+    };
+    req.onsuccess=e=>{db=e.target.result;resolve()};
+    req.onerror=()=>reject(req.error);
+  });
+}
+// Los instaladores se guardan como Blob/File directo (no como dataURL base64): pueden pesar
+// cientos de MB, y convertirlos a base64 sumaría ~33% más de tamaño y podría trabar el navegador.
+// IndexedDB admite Blobs de forma nativa, así que se guardan y se leen tal cual.
+function dbPutInstaller(file, pkg){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const item={id:id(),package:pkg,name:file.name,relPath:file.webkitRelativePath||'',type:file.type||'',size:file.size,blob:file,created:Date.now()};
+    const tx=db.transaction(INSTALLERS_STORE,'readwrite');
+    tx.objectStore(INSTALLERS_STORE).put(item);
+    tx.oncomplete=()=>resolve(item);
+    tx.onerror=()=>reject(tx.error||new Error('No se pudo guardar el instalador'));
+  });
+}
+function dbGetAllInstallers(){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const req=db.transaction(INSTALLERS_STORE,'readonly').objectStore(INSTALLERS_STORE).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbDeleteInstaller(fileId){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const tx=db.transaction(INSTALLERS_STORE,'readwrite');
+    tx.objectStore(INSTALLERS_STORE).delete(fileId);
+    tx.oncomplete=()=>resolve(true);
+    tx.onerror=()=>reject(tx.error||new Error('No se pudo eliminar el instalador'));
+  });
+}
+async function dbPut(file, owner){
+  const dataUrl=await fileToDataURL(file);
+  const realType=inferMimeType(file);
+  return new Promise((resolve,reject)=>{
+    const item={id:id(),owner,name:file.name,type:realType,size:file.size,dataUrl,created:Date.now()};
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).put(item);
+    tx.oncomplete=()=>resolve(item);
+    tx.onerror=()=>reject(tx.error||new Error('No se pudo guardar el archivo'));
+  });
+}
+function dbGet(fileId){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const req=db.transaction(STORE,'readonly').objectStore(STORE).get(fileId);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+  });
+}
+function dbDelete(fileId){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const tx=db.transaction(STORE,'readwrite');
+    tx.objectStore(STORE).delete(fileId);
+    tx.oncomplete=()=>resolve(true);
+    tx.onerror=()=>reject(tx.error||new Error('No se pudo eliminar el archivo'));
+  });
+}
+
+document.querySelectorAll('.sidebar .nav-link').forEach(a=>{
+  a.addEventListener('click',e=>{e.preventDefault();showSection(a.dataset.section);});
+});
+function showSection(name){
+  document.querySelectorAll('.app-section').forEach(s=>s.classList.add('d-none'));
+  document.getElementById(name).classList.remove('d-none');
+  document.querySelectorAll('.sidebar .nav-link').forEach(a=>a.classList.toggle('active',a.dataset.section===name));
+  document.getElementById('pageTitle').textContent={dashboard:'Inicio',correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores'}[name];
+  if(name==='correo') renderTemplates();
+  if(name==='tareas') renderTasks();
+  if(name==='notas') renderNotes();
+  if(name==='credenciales') renderCredentials();
+  if(name==='extensiones') renderExtensions();
+  if(name==='procedimientos') renderProcedures();
+  if(name==='responsables') renderResponsibles();
+  if(name==='cadenas') renderChains();
+  if(name==='instaladores') renderInstallers();
+  updateStats();
+}
+
+function updateStats(){
+  statTemplates.textContent=state.templates.length;
+  statDrafts.textContent=state.drafts.length;
+  statPending.textContent=state.tasks.filter(t=>t.status==='pendiente').length;
+  statProcess.textContent=state.tasks.filter(t=>t.status==='proceso').length;
+  statDone.textContent=state.tasks.filter(t=>t.status==='hecho').length;
+  countPendiente.textContent=state.tasks.filter(t=>t.status==='pendiente').length;
+  countProceso.textContent=state.tasks.filter(t=>t.status==='proceso').length;
+  countHecho.textContent=state.tasks.filter(t=>t.status==='hecho').length;
+  renderDashboardProcess();
+}
+function renderDashboardProcess(){
+  const grid=document.getElementById('dashboardProcessList');if(!grid)return;
+  const list=state.tasks.filter(t=>t.status==='proceso');
+  grid.innerHTML=list.length?list.map(t=>`<div class="col-md-6 col-xl-4"><div class="card border p-3 h-100"><div class="d-flex justify-content-between gap-2"><strong>${esc(t.title)}</strong><span class="badge text-bg-primary">En proceso</span></div><div class="small-muted mt-2">${esc(t.desc||'Sin descripción')}</div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay tareas en proceso.</div></div>';
+}
+
+function blankDraft(){
+  return {id:id(),title:'',to:'',cc:'',subject:'',body:'',attachments:[],updated:Date.now()};
+}
+function newDraft(){
+  showSection('correo');
+  const d=blankDraft(); state.drafts.unshift(d); persist(); loadDraft(d.id);
+}
+function loadDraft(draftId){
+  const d=state.drafts.find(x=>x.id===draftId); if(!d)return;
+  draftIdEl('draftId').value=d.id;
+  if(document.getElementById('draftTitle'))document.getElementById('draftTitle').value=d.title||''; to.value=d.to||''; cc.value=d.cc||''; subject.value=d.subject||''; body.innerHTML=d.body||'';
+  currentAttachments=d.attachments||[];
+  saveStatus.textContent='Borrador: '+new Date(d.updated).toLocaleString();
+  renderAttachments();
+}
+function draftIdEl(x){return document.getElementById(x)}
+window.deleteDraft=function(draftId){
+  const d=state.drafts.find(x=>String(x.id)===String(draftId)); if(!d)return;
+  askDelete('Eliminar borrador','¿Deseas eliminar el borrador "'+(d.title||'Sin título')+'"?',function(){
+    state.drafts=state.drafts.filter(x=>String(x.id)!==String(draftId));
+    state.itemOrder=(state.itemOrder||[]).filter(k=>k!=='draft:'+draftId);
+    persist();renderTemplates();showToast('Borrador eliminado');
+  });
+};
+function saveCurrentDraft(){
+  const d=state.drafts.find(x=>x.id===draftId.value);
+  if(!d){newDraft();return;}
+  d.title=(document.getElementById('draftTitle')?.value||'').trim(); d.to=to.value.trim(); d.cc=cc.value.trim(); d.subject=subject.value.trim(); d.body=body.innerHTML; d.attachments=currentAttachments; d.updated=Date.now();
+  persist(); saveStatus.textContent='Guardado '+new Date().toLocaleTimeString();
+  renderTemplates();
+}
+function deleteCurrentDraft(){
+  if(!draftId.value)return;
+  
+  state.drafts=state.drafts.filter(x=>x.id!==draftId.value); persist(); newDraft(); showToast('Borrador eliminado');
+}
+document.getElementById('body').addEventListener('input',()=>{clearTimeout(window.autoSave);window.autoSave=setTimeout(saveCurrentDraft,800)});
+document.getElementById('body').addEventListener('paste',emailBodyPasteHandler);
+document.getElementById('body').addEventListener('dragover',e=>{if(Array.from(e.dataTransfer?.items||[]).some(i=>i.type?.startsWith('image/')))e.preventDefault()});
+document.getElementById('body').addEventListener('drop',e=>{const f=Array.from(e.dataTransfer?.files||[]).find(x=>x.type.startsWith('image/'));if(!f)return;e.preventDefault();const r=new FileReader();r.onload=()=>{const img=document.createElement('img');img.src=r.result;img.alt='Imagen';const sel=window.getSelection();if(sel?.rangeCount){const range=sel.getRangeAt(0);range.deleteContents();range.insertNode(img);range.setStartAfter(img);range.collapse(true);sel.removeAllRanges();sel.addRange(range);}else document.getElementById('body').appendChild(img);document.getElementById('body').dispatchEvent(new Event('input',{bubbles:true}))};r.readAsDataURL(f)});
+['draftTitle','to','cc','subject'].forEach(x=>document.getElementById(x).addEventListener('input',()=>{clearTimeout(window.autoSave);window.autoSave=setTimeout(saveCurrentDraft,800)}));
+
+function newTemplate(){
+  document.getElementById('templateName').value='';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('templateModal')).show();
+}
+function saveTemplate(){
+  const title=document.getElementById('templateName').value.trim();
+  if(!title){showToast('Escribe el nombre de la plantilla','info');return;}
+  const d=blankDraft();d.title=title;d.subject='';state.templates.unshift({id:id(),title,...d});persist();renderTemplates();closeModalById('templateModal');
+}
+
+function copyEmailField(fieldId){
+  const el=document.getElementById(fieldId); const text=(el?.value||'').trim();
+  if(!text){showToast(fieldId==='to'?'No hay correos en Para':'No hay correos en CC','info');return;}
+  const seen=new Set(),out=[]; text.split(/[;,\n]+/).map(x=>x.trim()).filter(Boolean).forEach(x=>{const k=x.toLowerCase();if(!seen.has(k)){seen.add(k);out.push(x);}});
+  copyText(out.join('; '),fieldId==='to'?'Para copiado':'CC copiado');
+}
+function copyAllEmailAddresses(){const a=(document.getElementById('to')?.value||'').trim(),b=(document.getElementById('cc')?.value||'').trim();if(!a&&!b){showToast('No hay correos para copiar','info');return;}copyText([a,b].filter(Boolean).join('; '),'Correos copiados');}
+
+function renderTemplates(){
+  const q=(templateSearch.value||'').toLowerCase();
+  const items=[
+    ...state.templates.filter(t=>(t.title+' '+t.subject).toLowerCase().includes(q)).map(t=>({type:'template',...t})),
+    ...state.drafts.map(d=>({type:'draft',title:d.title||'Borrador sin título',...d}))
+  ];
+  templateList.innerHTML=items.length?items.map(x=>`
+    <div class="list-group-item template-item" onclick="openItem('${x.type}','${x.id}')">
+      <div class="d-flex justify-content-between"><strong>${esc(x.title||x.subject||'Sin título')}</strong><span class="badge ${x.type==='template'?'text-bg-primary':'text-bg-warning'}">${x.type==='template'?'Plantilla':'Borrador'}</span></div>
+      <div class="small-muted text-truncate">${esc(x.subject||'Sin asunto')}</div>
+    </div>`).join(''):'<div class="p-4 text-center text-secondary">No hay elementos.</div>';
+}
+function openItem(type,itemId){
+  if(type==='draft')loadDraft(itemId);
+  else {
+    const t=state.templates.find(x=>x.id===itemId);
+    if(!t)return;
+    const d=blankDraft(); d.title=t.title||''; d.to=t.to||''; d.cc=t.cc||''; d.subject=t.subject||''; d.body=t.body||''; d.attachments=t.attachments||[];
+    state.drafts.unshift(d); persist(); loadDraft(d.id);
+  }
+}
+let stagedFiles=[];
+document.getElementById('fileInput').addEventListener('change',e=>{
+  const files=Array.from(e.target.files);
+  e.target.value='';
+  if(!files.length)return;
+  stagedFiles=files.map(file=>({file,include:true}));
+  renderStagedFiles();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('attachStageModal')).show();
+});
+function renderStagedFiles(){
+  const box=document.getElementById('attachStageList');
+  if(!stagedFiles.length){box.innerHTML='<div class="text-secondary p-3 text-center">No hay archivos seleccionados.</div>';return;}
+  box.innerHTML='';
+  stagedFiles.forEach((s,i)=>{
+    const row=document.createElement('div');
+    row.className='d-flex align-items-center gap-2 border rounded p-2'+(s.include?'':' opacity-50');
+    const oversize=s.file.size>25*1024*1024;
+    let thumb='<i class="bi '+iconFor(s.file.type||'')+' fs-3"></i>';
+    row.innerHTML=`<div class="stage-thumb" style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${thumb}</div>
+      <div class="flex-grow-1 text-truncate"><strong class="text-truncate d-block">${esc(s.file.name)}</strong><div class="small-muted">${formatBytes(s.file.size)}${oversize?' · <span class="text-danger">supera 25 MB, no se subirá</span>':''}</div></div>
+      <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" onclick="removeStagedFile(${i})"><i class="bi bi-x-lg"></i></button>`;
+    box.appendChild(row);
+    if((s.file.type||'').startsWith('image/')){
+      const reader=new FileReader();
+      reader.onload=()=>{const img=row.querySelector('.stage-thumb');if(img)img.innerHTML=`<img src="${reader.result}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;">`;};
+      reader.readAsDataURL(s.file);
+    }
+  });
+  const btn=document.getElementById('attachStageConfirmBtn');
+  const n=stagedFiles.length; btn.textContent=n>1?('Subir '+n+' archivos'):'Subir archivo';
+}
+function removeStagedFile(i){stagedFiles.splice(i,1);renderStagedFiles();}
+function cancelStagedFiles(){stagedFiles=[];}
+async function confirmStagedFiles(){
+  const owner=draftId.value||'temp';
+  const oversized=stagedFiles.filter(s=>s.file.size>25*1024*1024);
+  const toUpload=stagedFiles.filter(s=>s.file.size<=25*1024*1024);
+  // Aviso temprano si el navegador ya casi no tiene espacio para guardar archivos (IndexedDB),
+  // que es otra causa frecuente de "PDFs que no se guardan" sin ningún mensaje claro.
+  if(toUpload.length&&navigator.storage&&navigator.storage.estimate){
+    try{
+      const {usage=0,quota=0}=await navigator.storage.estimate();
+      const needed=toUpload.reduce((sum,s)=>sum+s.file.size,0)*1.4; // dataURL en base64 pesa ~37% más
+      if(quota&&(usage+needed)>quota*0.95){
+        showToast('Espacio de almacenamiento casi lleno en este navegador. Borra adjuntos viejos antes de subir más PDFs.','danger');
+      }
+    }catch(e){/* estimate no disponible en este navegador, se ignora */}
+  }
+  let okCount=0;
+  const failed=[];
+  for(const s of toUpload){
+    try{
+      const saved=await dbPut(s.file,owner);
+      currentAttachments.push({id:saved.id,name:saved.name,type:saved.type,size:saved.size});
+      okCount++;
+    }catch(err){
+      console.error('dbPut error:',err);
+      const isQuota=err && (err.name==='QuotaExceededError' || /quota/i.test(err.message||''));
+      failed.push({name:s.file.name,reason:isQuota?'sin espacio de almacenamiento':'error al guardar'});
+    }
+  }
+  stagedFiles=[];
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('attachStageModal')).hide();
+  if(okCount>0) saveCurrentDraft();
+  renderAttachments();
+  // Avisar de forma clara y persistente sobre cualquier archivo que NO se haya guardado,
+  // en vez de descartarlo en silencio (esta era la causa de que "no se guardaran los demás PDF").
+  if(oversized.length||failed.length){
+    const partes=[];
+    if(okCount>0) partes.push(okCount+' archivo(s) guardado(s) correctamente.');
+    oversized.forEach(s=>partes.push('❌ '+s.file.name+': supera 25 MB, no se subió.'));
+    failed.forEach(f=>partes.push('❌ '+f.name+': '+f.reason+'.'));
+    showToast(partes.join(' '),'danger');
+  }else if(okCount>0){
+    showToast(okCount>1?okCount+' archivos guardados':'Archivo guardado');
+  }
+}
+async function renderAttachments(){
+  attachmentList.innerHTML='';
+  if(!currentAttachments.length){attachmentList.innerHTML='<div class="col-12"><div class="dropzone">Sin adjuntos</div></div>';return;}
+  for(const a of currentAttachments){
+    const col=document.createElement('div'); col.className='col-md-6';
+    col.innerHTML=`<div class="attachment d-flex justify-content-between align-items-center">
+      <div class="text-truncate me-2"><i class="bi ${iconFor(a.type)} me-2"></i><strong>${esc(a.name)}</strong><div class="small-muted">${formatBytes(a.size)}</div></div>
+      <div class="btn-group btn-group-sm">
+        <button class="btn btn-outline-primary" onclick="previewFile('${a.id}')"><i class="bi bi-eye"></i></button>
+        <button class="btn btn-outline-secondary" onclick="downloadAttachment('${a.id}')" title="Descargar"><i class="bi bi-download"></i></button>
+        <button class="btn btn-outline-danger" onclick="removeAttachment('${a.id}')"><i class="bi bi-x"></i></button>
+      </div></div>`;
+    attachmentList.appendChild(col);
+  }
+}
+async function previewFile(fileId){
+  const a=currentAttachments.find(x=>String(x.id)===String(fileId)); const item=await dbGet(fileId); if(!item)return;
+  if(currentPreviewUrl)URL.revokeObjectURL(currentPreviewUrl);
+  currentPreviewUrl=item.dataUrl?toViewableUrl(item.dataUrl,item.name||a?.name):'';
+  window._currentPreviewFile={url:currentPreviewUrl,name:item.name||a?.name||'archivo'};
+  document.getElementById('previewDownloadBtn')?.classList.toggle('d-none',!currentPreviewUrl);
+  document.getElementById('previewOpenTabBtn')?.classList.toggle('d-none',!currentPreviewUrl);
+  previewEmpty.classList.add('d-none'); pdfViewer.classList.add('d-none'); imageViewer.classList.add('d-none');
+  const type=(item.type||a?.type||'').toLowerCase();
+  if(type==='application/pdf'||/\.pdf$/i.test(item.name||'')){pdfViewer.src=currentPreviewUrl;pdfViewer.classList.remove('d-none');}
+  else if(type.startsWith('image/')||/\.(png|jpe?g|webp|gif)$/i.test(item.name||'')){imageViewer.src=currentPreviewUrl;imageViewer.classList.remove('d-none');}
+  else {previewEmpty.classList.remove('d-none');previewEmpty.innerHTML=`<div class="p-5"><i class="bi bi-file-earmark fs-1"></i><p class="mt-2">No hay vista previa integrada para este tipo de archivo.</p><strong>${esc(item.name)}</strong></div>`;}
+  document.getElementById('previewCard').scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Descarga genérica: crea un enlace temporal a partir del dataURL guardado en IndexedDB y lo activa.
+function downloadDataUrl(dataUrl,filename){
+  if(!dataUrl){showToast('El archivo no está disponible para descargar','danger');return;}
+  const a=document.createElement('a');
+  a.href=dataUrl; a.download=filename||'archivo';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function downloadCurrentPreview(){
+  const f=window._currentPreviewFile;
+  if(!f){showToast('No hay ningún archivo abierto para descargar','danger');return;}
+  downloadDataUrl(f.url,f.name);
+}
+async function downloadAttachment(fileId){
+  const a=currentAttachments.find(x=>String(x.id)===String(fileId));
+  const item=await dbGet(fileId);
+  if(!item){showToast('El archivo no está disponible para descargar','danger');return;}
+  const name=item.name||a?.name||'archivo';
+  const url=toViewableUrl(item.dataUrl,name);
+  downloadDataUrl(url,name);
+  if(url!==item.dataUrl)setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
+
+function clearPreview(){
+  if(currentPreviewUrl)URL.revokeObjectURL(currentPreviewUrl);
+  currentPreviewUrl=null; window._currentPreviewFile=null; pdfViewer.src='about:blank'; pdfViewer.classList.add('d-none'); imageViewer.src=''; imageViewer.classList.add('d-none');
+  document.getElementById('previewDownloadBtn')?.classList.add('d-none');
+  document.getElementById('previewOpenTabBtn')?.classList.add('d-none');
+  previewEmpty.classList.remove('d-none'); previewEmpty.textContent='Selecciona un PDF o una imagen en los adjuntos para verla aquí.';
+}
+async function removeAttachment(fileId){
+  await dbDelete(fileId); currentAttachments=currentAttachments.filter(x=>x.id!==fileId); saveCurrentDraft(); renderAttachments(); clearPreview();
+}
+function insertText(txt){const el=document.getElementById('body');el.focus();const sel=window.getSelection();if(sel&&sel.rangeCount){const r=sel.getRangeAt(0);r.deleteContents();r.insertNode(document.createTextNode(txt));r.collapse(false);sel.removeAllRanges();sel.addRange(r);}else el.appendChild(document.createTextNode(txt));saveCurrentDraft()}
+
+function addTask(){
+  taskId.value=''; taskTitle.value=''; taskDesc.value=''; document.getElementById('taskDueAt').value='';
+  document.getElementById('taskModalTitle').textContent='Nueva tarea';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).show();
+}
+function editTask(taskIdValue){
+  const t=state.tasks.find(x=>String(x.id)===String(taskIdValue)); if(!t)return;
+  taskId.value=t.id; taskTitle.value=t.title||''; taskDesc.value=t.desc||'';
+  document.getElementById('taskDueAt').value=t.dueAt?toLocalDateTimeInputValue(t.dueAt):'';
+  document.getElementById('taskModalTitle').textContent='Editar tarea';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('taskModal')).show();
+}
+// El input datetime-local no entiende ISO con zona horaria; esto lo convierte a la hora local del navegador.
+function toLocalDateTimeInputValue(isoString){
+  const d=new Date(isoString); if(isNaN(d))return'';
+  const pad=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes());
+}
+function saveTask(){
+  const title=taskTitle.value.trim(); if(!title){showToast('Escribe un título','info');return;}
+  const cid=taskId.value;
+  const dueAtRaw=document.getElementById('taskDueAt').value;
+  const dueAt=dueAtRaw?new Date(dueAtRaw).toISOString():null;
+  if(cid){
+    const t=state.tasks.find(x=>String(x.id)===String(cid));
+    if(t){
+      const dueChanged=(t.dueAt||null)!==dueAt;
+      t.title=title;t.desc=taskDesc.value.trim();t.dueAt=dueAt;t.updated=Date.now();
+      if(dueChanged)t.lastNotifiedAt=0; // si cambia la hora, se vuelve a armar el aviso desde cero
+    }
+  }else state.tasks.push({id:id(),title,desc:taskDesc.value.trim(),status:'pendiente',dueAt,lastNotifiedAt:0,created:Date.now(),updated:Date.now()});
+  // Pedir permiso de notificaciones justo cuando el usuario programa una hora (gesto del usuario = clic en Guardar).
+  if(dueAt&&window.Notification&&Notification.permission==='default'){try{Notification.requestPermission();}catch(e){}}
+  persist();renderTasks();closeModalById('taskModal');showToast(cid?'Tarea actualizada':'Tarea creada');
+}
+function renderTasks(){
+  ['pendiente','proceso','hecho'].forEach(s=>{
+    const col=document.getElementById('col'+s[0].toUpperCase()+s.slice(1));if(col)col.innerHTML='';
+  });
+  state.tasks.forEach(t=>{
+    const el=document.createElement('div');el.className='task-card';el.draggable=true;el.dataset.id=t.id;
+    el.innerHTML=`<div class="d-flex justify-content-between gap-2"><strong>${esc(t.title)}</strong><div class="btn-group btn-group-sm"><button class="btn btn-link text-primary p-0 js-task-edit" data-id="${escAttr(t.id)}" title="Editar"><i class="bi bi-pencil"></i></button><button class="btn btn-link text-danger p-0 js-task-delete" data-id="${escAttr(t.id)}" title="Eliminar"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-1">${esc(t.desc||'Sin descripción')}</div>${t.dueAt?`<div class="small mt-1 ${t.status!=='hecho'&&new Date(t.dueAt).getTime()<=Date.now()?'text-danger':'text-primary'}"><i class="bi bi-alarm"></i> ${new Date(t.dueAt).toLocaleString()}</div>`:''}`;
+    el.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',t.id));
+    const target=document.getElementById('col'+t.status[0].toUpperCase()+t.status.slice(1));if(target)target.appendChild(el);
+  });
+  document.querySelectorAll('.kanban-column').forEach(col=>{
+    col.ondragover=e=>e.preventDefault();
+    col.ondrop=e=>{const t=state.tasks.find(x=>String(x.id)===String(e.dataTransfer.getData('text/plain')));if(t){t.status=col.dataset.status;t.updated=Date.now();persist();renderTasks();showToast('Estado actualizado');}};
+  });
+  updateStats();
+}
+function deleteTask(taskIdValue){
+  state.tasks=state.tasks.filter(t=>String(t.id)!==String(taskIdValue));persist();renderTasks();showToast('Tarea eliminada');
+}
+document.addEventListener('click',e=>{
+  const edit=e.target.closest('.js-task-edit'); if(edit){e.preventDefault();editTask(edit.dataset.id);}
+  const del=e.target.closest('.js-task-delete'); if(del){e.preventDefault();deleteTask(del.dataset.id);}
+});
+
+function noteExec(cmd,val){
+  const ed=document.getElementById('noteText');
+  ed.focus();
+  document.execCommand(cmd,false,val);
+}
+function addNote(){
+  document.getElementById('noteModal').querySelector('.modal-title').textContent='Nueva nota';
+  document.getElementById('noteId').value='';
+  noteTitle.value=''; noteText.innerHTML=''; noteImportant.checked=true;
+  new bootstrap.Modal('#noteModal').show();
+}
+function editNote(noteId){
+  const n=state.notes.find(x=>x.id===noteId); if(!n)return;
+  document.getElementById('noteModal').querySelector('.modal-title').textContent='Editar nota';
+  document.getElementById('noteId').value=n.id;
+  noteTitle.value=n.title; noteText.innerHTML=n.text||''; noteImportant.checked=!!n.important;
+  new bootstrap.Modal('#noteModal').show();
+}
+function saveNote(){
+  const title=noteTitle.value.trim();if(!title)return;
+  const noteId=document.getElementById('noteId').value;
+  const html=noteText.innerHTML;
+  if(noteId){
+    const n=state.notes.find(x=>x.id===noteId);
+    if(n){n.title=title;n.text=html;n.important=noteImportant.checked;n.updated=Date.now();}
+  }else{
+    state.notes.unshift({id:id(),title,text:html,important:noteImportant.checked,created:Date.now(),updated:Date.now()});
+  }
+  persist();renderNotes();updateStats();closeModalById('noteModal');
+}
+function renderNotes(){
+  notesGrid.innerHTML=state.notes.length?state.notes.map(n=>`<div class="col-md-6 col-xl-4"><div class="card p-3 ${n.important?'note-important':''} drag-card" draggable="false" data-drag-id="${n.id}"><div class="d-flex justify-content-between gap-2"><h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(n.title)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editNote('${n.id}')" title="Editar"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteNote('${n.id}')" title="Eliminar"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mb-2">Actualizada: ${new Date(n.updated||n.created).toLocaleString()}</div><div class="note-rich-content">${n.text||''}</div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay notas.</div></div>';
+}
+function deleteNote(noteId){state.notes=state.notes.filter(n=>n.id!==noteId);persist();renderNotes()}
+
+
+
+
+
+/* ===== EXTENSIONES / PROCEDIMIENTOS / SOLUCIONES ===== */
+let extensions = JSON.parse(localStorage.getItem('co_extensions') || 'null');
+if(!extensions){
+  extensions=[
+    {id:id(),name:'PAC completo sin internet / Mesa de ayuda',number:'7777',category:'PAC',note:'Mesa de ayuda'},
+    {id:id(),name:'Soporte remoto MRA / contingencia',number:'8764',category:'Soporte',note:'Interfonía también a *6108'},
+    {id:id(),name:'Interfonía',number:'*6108',category:'Soporte',note:''},
+    {id:id(),name:'MRA',number:'4625',category:'MRA',note:''},
+    {id:id(),name:'PAC',number:'4624',category:'PAC',note:''},
+    {id:id(),name:'PDV / LSR',number:'2421',category:'Soporte',note:''}
+  ];
+  localStorage.setItem('co_extensions',JSON.stringify(extensions));
+}
+let procedures = JSON.parse(localStorage.getItem('co_procedures') || '[]');
+
+function showToast(message,type="success"){let h=document.getElementById("appToastHost");if(!h){h=document.createElement("div");h.id="appToastHost";h.style.cssText="position:fixed;right:20px;bottom:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:360px;";document.body.appendChild(h)}const t=document.createElement("div");const isError=type==="danger"||type==="warning";const borderColor=isError?'#f5c2c7':'var(--app-toast-border)';t.style.cssText="background:var(--app-toast-bg);color:var(--bs-body-color);border:1px solid "+borderColor+";border-radius:10px;padding:10px 14px;font-size:14px;box-shadow:0 4px 16px rgba(0,0,0,.18);pointer-events:auto;";const icon=type==="success"?'bi-check-circle-fill text-success':(isError?'bi-exclamation-triangle-fill text-danger':'bi-info-circle-fill text-primary');t.innerHTML='<i class="bi '+icon+' me-2"></i>'+esc(message);h.appendChild(t);const duration=isError?6000:1600;setTimeout(()=>{t.style.opacity="0";t.style.transition="opacity .2s";setTimeout(()=>t.remove(),220)},duration)}
+async function copyText(text,message="Copiado"){if(!text)return false;try{await navigator.clipboard.writeText(text)}catch(e){const ta=document.createElement("textarea");ta.value=text;ta.style.position="fixed";ta.style.opacity="0";document.body.appendChild(ta);ta.select();document.execCommand("copy");ta.remove()}showToast(message);return true}
+function renderExtensions(){
+  const q=(document.getElementById('extensionSearch')?.value||'').toLowerCase(), cat=document.getElementById('extensionCategory')?.value||'';
+  const list=extensions.filter(x=>(x.name+' '+x.number+' '+x.note+' '+x.category).toLowerCase().includes(q)&&(!cat||x.category===cat));
+  extensionsGrid.innerHTML=list.length?list.map(x=>`
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="card extension-card h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}">
+        <div class="d-flex justify-content-between">
+          <h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(x.name)}</h6>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-primary js-ext-edit" data-id="${escAttr(x.id)}"><i class="bi bi-pencil"></i></button>
+            <button type="button" class="btn btn-outline-danger js-ext-delete" data-id="${escAttr(x.id)}"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+        <div class="display-6 fw-bold my-2">${esc(x.number)}</div>
+        <span class="badge text-bg-light">${esc(x.category)}</span>
+        ${x.note?`<div class="small-muted mt-2">${esc(x.note)}</div>`:''}
+        <button type="button" class="btn btn-primary w-100 mt-3 js-ext-copy" data-id="${escAttr(x.id)}"><i class="bi bi-copy"></i> Copiar extensión</button>
+      </div>
+    </div>`).join(''):'<div class="col-12"><div class="dropzone">No hay extensiones.</div></div>';
+}
+
+function addExtension(){
+  extensionId.value='';extensionName.value='';extensionNumber.value='';extensionNote.value='';extensionCategoryInput.value='Soporte';extensionModalTitle.textContent='Nueva extensión';new bootstrap.Modal('#extensionModal').show();
+}
+function editExtension(xid){
+  const x=extensions.find(a=>a.id===xid);if(!x)return;
+  extensionId.value=x.id;extensionName.value=x.name;extensionNumber.value=x.number;extensionNote.value=x.note||'';extensionCategoryInput.value=x.category||'Otros';extensionModalTitle.textContent='Editar extensión';new bootstrap.Modal('#extensionModal').show();
+}
+function saveExtension(){
+  if(!extensionName.value.trim()||!extensionNumber.value.trim())return showToast('Nombre y extensión son obligatorios','info');
+  const x=extensions.find(a=>a.id===extensionId.value);
+  if(x){x.name=extensionName.value.trim();x.number=extensionNumber.value.trim();x.category=extensionCategoryInput.value;x.note=extensionNote.value.trim();}
+  else extensions.unshift({id:id(),name:extensionName.value.trim(),number:extensionNumber.value.trim(),category:extensionCategoryInput.value,note:extensionNote.value.trim()});
+  persistOperations();renderExtensions();closeModalById('extensionModal');
+}
+function addProcedure(){
+  procedureId.value='';procedureName.value='';procedurePdf.value='';procedureCurrentFile.textContent='';procedureModalTitle.textContent='Nuevo procedimiento';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('procedureModal')).show();
+}
+function editProcedure(pid){
+  const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;
+  procedureId.value=p.id;procedureName.value=p.name||'';procedurePdf.value='';procedureCurrentFile.textContent=p.filename?('PDF actual: '+p.filename):'Sin PDF';procedureModalTitle.textContent='Editar procedimiento';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('procedureModal')).show();
+}
+async function saveProcedure(){
+  const name=procedureName.value.trim(),file=procedurePdf.files?.[0]||null;
+  if(!name){showToast('Escribe el nombre del procedimiento','info');return;}
+  if(file&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){showToast('Solo se permiten archivos PDF','info');return;}
+  try{
+    const pid=procedureId.value;let p=procedures.find(x=>String(x.id)===String(pid));
+    if(!p){if(!file){showToast('Selecciona el PDF del procedimiento','info');return;}const meta=await dbPut(file,'procedure');p={id:id(),name,filename:file.name,fileId:meta.id,type:file.type,size:file.size,created:Date.now(),updated:Date.now()};procedures.unshift(p);}
+    else{p.name=name;p.updated=Date.now();if(file){if(p.fileId)await dbDelete(p.fileId);const meta=await dbPut(file,'procedure');p.fileId=meta.id;p.filename=file.name;p.type=file.type;p.size=file.size;}}
+    persistOperations();renderProcedures();closeModalById('procedureModal');showToast('Procedimiento guardado');
+  }catch(err){console.error(err);showToast('No se pudo guardar el PDF','danger');}
+}
+function renderProcedures(){
+  const q=(document.getElementById('procedureSearch')?.value||'').toLowerCase(),grid=document.getElementById('proceduresGrid');if(!grid)return;
+  const list=procedures.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));
+  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card procedure-card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-file-earmark-pdf text-danger me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editProcedure('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteProcedure('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openProcedure('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay procedimientos guardados.</div></div>';
+}
+async function openProcedure(pid){const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;try{const item=await dbGet(p.fileId);if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}if(window._currentManualBlobUrl){URL.revokeObjectURL(window._currentManualBlobUrl);window._currentManualBlobUrl=null;}const url=toViewableUrl(item.dataUrl,item.name||p.filename);if(url!==item.dataUrl)window._currentManualBlobUrl=url;manualViewer.src=url;window._currentManualName=item.name||p.filename||'procedimiento.pdf';manualPreviewCard.classList.remove('d-none');manualPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});}catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}}
+function closeManualPreview(){if(window._currentManualBlobUrl){URL.revokeObjectURL(window._currentManualBlobUrl);window._currentManualBlobUrl=null;}manualViewer.src='about:blank';manualPreviewCard.classList.add('d-none');}
+async function deleteProcedure(pid){const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;try{if(p.fileId)await dbDelete(p.fileId);}catch(err){console.warn(err)}procedures=procedures.filter(x=>String(x.id)!==String(pid));persistOperations();renderProcedures();showToast('Procedimiento eliminado');}
+
+let responsibles=JSON.parse(localStorage.getItem('co_responsibles')||'[]');
+let chains=JSON.parse(localStorage.getItem('co_chains')||'[]');
+function persistOperations(){localStorage.setItem('co_extensions',JSON.stringify(extensions));localStorage.setItem('co_procedures',JSON.stringify(procedures));localStorage.setItem('co_responsibles',JSON.stringify(responsibles));localStorage.setItem('co_chains',JSON.stringify(chains));}
+function addResponsible(){responsibleId.value='';responsibleCode.value='';responsibleName.value='';responsibleTeam.value='';responsibleModalTitle.textContent='Nuevo responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
+function editResponsible(rid){const r=responsibles.find(x=>String(x.id)===String(rid));if(!r)return;responsibleId.value=r.id;responsibleCode.value=r.code||'';responsibleName.value=r.name||'';responsibleTeam.value=r.team||'';responsibleModalTitle.textContent='Editar responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
+function saveResponsible(){const code=responsibleCode.value.trim(),name=responsibleName.value.trim(),team=responsibleTeam.value.trim();if(!code||!name||!team){showToast('Completa los 3 campos del responsable','info');return;}const rid=responsibleId.value,r=responsibles.find(x=>String(x.id)===String(rid));if(r){r.code=code;r.name=name;r.team=team;}else responsibles.unshift({id:id(),code,name,team,created:Date.now()});persistOperations();renderResponsibles();closeModalById('responsibleModal');showToast('Responsable guardado');}
+function renderResponsibles(){const q=(document.getElementById('responsibleSearch')?.value||'').toLowerCase(),grid=document.getElementById('responsiblesGrid');if(!grid)return;const list=responsibles.filter(x=>((x.code||'')+' '+(x.name||'')+' '+(x.team||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editResponsible('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteResponsible('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted"><strong>Código:</strong> ${esc(x.code)}</div><div class="small-muted"><strong>Equipo:</strong> ${esc(x.team)}</div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay responsables guardados.</div></div>';}
+function deleteResponsible(rid){responsibles=responsibles.filter(x=>String(x.id)!==String(rid));persistOperations();renderResponsibles();showToast('Responsable eliminado');}
+function addChain(){chainId.value='';chainName.value='';chainPdf.value='';chainCurrentFile.textContent='';chainModalTitle.textContent='Nueva cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
+function editChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;chainId.value=c.id;chainName.value=c.name||'';chainPdf.value='';chainCurrentFile.textContent=c.filename?('PDF actual: '+c.filename):'Sin PDF';chainModalTitle.textContent='Editar cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
+async function saveChain(){const name=chainName.value.trim(),file=chainPdf.files?.[0]||null;if(!name){showToast('Escribe el nombre de la cadena','info');return;}if(file&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){showToast('Solo se permiten archivos PDF','info');return;}try{const cid=chainId.value;let c=chains.find(x=>String(x.id)===String(cid));if(!c){if(!file){showToast('Selecciona el PDF de la cadena','info');return;}const meta=await dbPut(file,'chain');c={id:id(),name,filename:file.name,fileId:meta.id,type:file.type,size:file.size,created:Date.now()};chains.unshift(c);}else{c.name=name;if(file){if(c.fileId)await dbDelete(c.fileId);const meta=await dbPut(file,'chain');c.fileId=meta.id;c.filename=file.name;c.type=file.type;c.size=file.size;}}persistOperations();renderChains();closeModalById('chainModal');showToast('Cadena guardada');}catch(err){console.error(err);showToast('No se pudo guardar el PDF','danger');}}
+function renderChains(){const q=(document.getElementById('chainSearch')?.value||'').toLowerCase(),grid=document.getElementById('chainsGrid');if(!grid)return;const list=chains.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-telephone text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editChain('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteChain('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openChain('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay cadenas guardadas.</div></div>';}
+async function openChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;try{const item=await dbGet(c.fileId);if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}if(window._currentChainBlobUrl){URL.revokeObjectURL(window._currentChainBlobUrl);window._currentChainBlobUrl=null;}const url=toViewableUrl(item.dataUrl,item.name||c.filename);if(url!==item.dataUrl)window._currentChainBlobUrl=url;chainViewer.src=url;window._currentChainName=item.name||c.filename||'cadena.pdf';chainPreviewCard.classList.remove('d-none');chainPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});}catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}}
+function closeChainPreview(){if(window._currentChainBlobUrl){URL.revokeObjectURL(window._currentChainBlobUrl);window._currentChainBlobUrl=null;}chainViewer.src='about:blank';chainPreviewCard.classList.add('d-none');}
+async function deleteChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;try{if(c.fileId)await dbDelete(c.fileId);}catch(err){console.warn(err)}chains=chains.filter(x=>String(x.id)!==String(cid));persistOperations();renderChains();showToast('Cadena eliminada');}
+
+/* ===== BANCO DE INSTALADORES ===== */
+let stagedInstallers=[], _installersCache=[];
+function iconForInstaller(name){
+  const n=(name||'').toLowerCase();
+  if(n.endsWith('.zip')||n.endsWith('.rar')||n.endsWith('.7z'))return 'bi-file-earmark-zip text-warning';
+  if(n.endsWith('.exe')||n.endsWith('.msi'))return 'bi-file-earmark-binary text-primary';
+  if(n.endsWith('.dmg')||n.endsWith('.pkg'))return 'bi-apple';
+  if(n.endsWith('.apk'))return 'bi-android2 text-success';
+  return 'bi-file-earmark text-secondary';
+}
+function detectPackageName(files){
+  const withPath=files.find(f=>f.webkitRelativePath);
+  return withPath?withPath.webkitRelativePath.split('/')[0]:'';
+}
+document.getElementById('installerFolderInput').addEventListener('change', e=>{
+  const files=Array.from(e.target.files); e.target.value='';
+  if(!files.length)return;
+  stagedInstallers=files.map(file=>({file}));
+  document.getElementById('installerPackageName').value=detectPackageName(files);
+  renderStagedInstallers();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).show();
+});
+document.getElementById('installerFilesInput').addEventListener('change', e=>{
+  const files=Array.from(e.target.files); e.target.value='';
+  if(!files.length)return;
+  stagedInstallers=files.map(file=>({file}));
+  document.getElementById('installerPackageName').value='';
+  renderStagedInstallers();
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).show();
+});
+function renderStagedInstallers(){
+  const box=document.getElementById('installerStageList');
+  if(!stagedInstallers.length){box.innerHTML='<div class="text-secondary p-3 text-center">No hay archivos seleccionados.</div>';return;}
+  box.innerHTML='';
+  stagedInstallers.forEach((s,i)=>{
+    const parts=(s.file.webkitRelativePath||'').split('/');
+    const sub=parts.length>2?parts.slice(1,-1).join('/'):'';
+    const row=document.createElement('div');
+    row.className='d-flex align-items-center gap-2 border rounded p-2';
+    row.innerHTML=`<i class="bi ${iconForInstaller(s.file.name)} fs-4"></i>
+      <div class="flex-grow-1 text-truncate"><strong class="text-truncate d-block">${esc(s.file.name)}</strong><div class="small-muted">${formatBytes(s.file.size)}${sub?(' · '+esc(sub)+'/'):''}</div></div>
+      <button type="button" class="btn btn-sm btn-outline-danger" title="Quitar" onclick="removeStagedInstaller(${i})"><i class="bi bi-x-lg"></i></button>`;
+    box.appendChild(row);
+  });
+  const btn=document.getElementById('installerStageConfirmBtn');
+  const n=stagedInstallers.length; btn.textContent=n>1?('Guardar '+n+' archivos'):'Guardar archivo';
+}
+function removeStagedInstaller(i){stagedInstallers.splice(i,1);renderStagedInstallers();}
+function cancelStagedInstallers(){stagedInstallers=[];}
+async function confirmStagedInstallers(){
+  const pkg=(document.getElementById('installerPackageName').value||'').trim();
+  if(!pkg){showToast('Escribe un nombre de paquete','info');return;}
+  if(!stagedInstallers.length){bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).hide();return;}
+  let okCount=0;
+  for(const s of stagedInstallers){
+    try{ await dbPutInstaller(s.file, pkg); okCount++; }
+    catch(err){
+      console.error('dbPutInstaller error:',err);
+      const isQuota=err && (err.name==='QuotaExceededError' || /quota/i.test(err.message||''));
+      showToast(isQuota?'Sin espacio de almacenamiento para '+s.file.name+' (borra instaladores viejos)':'No se pudo guardar '+s.file.name,'danger');
+    }
+  }
+  stagedInstallers=[];
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).hide();
+  if(okCount>0) showToast(okCount+' archivo(s) guardado(s) en "'+pkg+'"');
+  renderInstallers();
+}
+async function renderInstallers(){
+  const grid=document.getElementById('installersGrid');
+  if(!grid)return;
+  try{ _installersCache=await dbGetAllInstallers(); }
+  catch(err){ console.error(err); grid.innerHTML='<div class="col-12"><div class="dropzone">No se pudo leer el banco de instaladores.</div></div>'; return; }
+  const q=(document.getElementById('installerSearch')?.value||'').toLowerCase();
+  const totalEl=document.getElementById('installerTotalSize');
+  if(totalEl){
+    const totalBytes=_installersCache.reduce((a,x)=>a+(x.size||0),0);
+    totalEl.textContent=_installersCache.length?(_installersCache.length+' archivo(s) · '+formatBytes(totalBytes)+' en total'):'';
+  }
+  const byPkg={};
+  _installersCache.forEach(x=>{
+    const pkg=x.package||'Sin categoría';
+    if(q && !((pkg+' '+x.name).toLowerCase().includes(q))) return;
+    (byPkg[pkg]=byPkg[pkg]||[]).push(x);
+  });
+  const pkgNames=Object.keys(byPkg).sort((a,b)=>a.localeCompare(b));
+  if(!pkgNames.length){grid.innerHTML='<div class="col-12"><div class="dropzone">No hay instaladores guardados.</div></div>';return;}
+  grid.innerHTML=pkgNames.map(pkg=>{
+    const files=byPkg[pkg];
+    const pkgBytes=files.reduce((a,x)=>a+(x.size||0),0);
+    return `<div class="col-12"><div class="card p-3 border">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+        <h6 class="mb-0"><i class="bi bi-folder-fill text-warning me-1"></i>${esc(pkg)} <span class="small-muted">(${files.length} archivo(s) · ${formatBytes(pkgBytes)})</span></h6>
+        <button class="btn btn-sm btn-outline-danger" onclick="deleteInstallerPackage('${escAttr(pkg)}')"><i class="bi bi-trash"></i> Eliminar paquete</button>
+      </div>
+      <div class="row g-2">
+        ${files.map(x=>`<div class="col-md-6 col-xl-4"><div class="attachment d-flex justify-content-between align-items-center border rounded p-2">
+          <div class="text-truncate me-2"><i class="bi ${iconForInstaller(x.name)} me-2"></i><strong class="text-truncate">${esc(x.name)}</strong><div class="small-muted">${formatBytes(x.size||0)}</div></div>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-primary" title="Descargar" onclick="downloadInstaller('${escAttr(x.id)}')"><i class="bi bi-download"></i></button>
+            <button class="btn btn-outline-danger" title="Eliminar" onclick="deleteInstaller('${escAttr(x.id)}')"><i class="bi bi-x"></i></button>
+          </div></div></div>`).join('')}
+      </div>
+    </div></div>`;
+  }).join('');
+}
+function downloadInstaller(fileId){
+  const item=_installersCache.find(x=>String(x.id)===String(fileId));
+  if(!item||!item.blob){showToast('El archivo no está disponible','danger');return;}
+  const url=URL.createObjectURL(item.blob);
+  const a=document.createElement('a'); a.href=url; a.download=item.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),4000);
+}
+async function deleteInstaller(fileId){
+  try{ await dbDeleteInstaller(fileId); showToast('Archivo eliminado'); renderInstallers(); }
+  catch(err){ console.error(err); showToast('No se pudo eliminar el archivo','danger'); }
+}
+function deleteInstallerPackage(pkg){
+  askDelete('Eliminar paquete','Se eliminarán todos los archivos del paquete "'+pkg+'". ¿Continuar?',async ()=>{
+    const files=_installersCache.filter(x=>(x.package||'Sin categoría')===pkg);
+    for(const f of files){ try{ await dbDeleteInstaller(f.id); }catch(err){ console.warn(err); } }
+    showToast('Paquete eliminado'); renderInstallers();
+  });
+}
+
+function computeSearchResults(term){
+  const results=[];
+  if(!term) return results;
+  // "highlight" es un selector CSS opcional: tras navegar a la sección, se busca ese elemento,
+  // se hace scroll hasta él y se le aplica un destello para que sea evidente entre varias tarjetas.
+  const add=(type,title,desc,section,action,highlight)=>results.push({type,title,desc,section,action:action||(()=>{showSection(section);if(highlight)highlightSearchHit(highlight);})});
+  const scan=(arr,fn)=>Array.isArray(arr)&&arr.forEach(x=>{try{fn(x)}catch(e){}});
+  const sel=(gridId,itemId)=>'#'+gridId+' [data-drag-id="'+CSS.escape(String(itemId))+'"]';
+
+  scan(credentials,x=>{if((x.name+' '+x.user+' '+x.note).toUpperCase().includes(term))add('🔐 Clave',x.name,x.user||'','credenciales',null,sel('credentialsGrid',x.id))});
+  scan(extensions,x=>{if((x.name+' '+x.number+' '+x.category+' '+x.note).toUpperCase().includes(term))add('☎️ Extensión',x.name,x.number+' · '+x.category,'extensiones',null,sel('extensionsGrid',x.id))});
+  scan(procedures,x=>{if(((x.name||'')+' '+(x.filename||'')).toUpperCase().includes(term))add('📚 Procedimiento',x.name,x.filename||'','procedimientos',null,sel('proceduresGrid',x.id))});
+  scan(responsibles,x=>{if(((x.code||'')+' '+(x.name||'')+' '+(x.team||'')).toUpperCase().includes(term))add('👤 Responsable',x.name,(x.code||'')+' · '+(x.team||''),'responsables',null,sel('responsiblesGrid',x.id))});
+  scan(chains,x=>{if(((x.name||'')+' '+(x.filename||'')).toUpperCase().includes(term))add('📞 Cadena',x.name,x.filename||'','cadenas',null,sel('chainsGrid',x.id))});
+  scan((window.state&&state.notes)||[],x=>{const plain=(x.text||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();if(((x.title||'')+' '+plain).toUpperCase().includes(term))add('📝 Nota',x.title,plain.slice(0,90),'notas',null,sel('notesGrid',x.id))});
+  scan((window.state&&state.tasks)||[],x=>{if(((x.title||'')+' '+(x.desc||'')).toUpperCase().includes(term))add('📋 Tarea',x.title,x.desc||'','tareas',null,'.task-card[data-id="'+CSS.escape(String(x.id))+'"]')});
+  scan((window.state&&state.templates)||[],x=>{if(((x.title||'')+' '+(x.subject||'')+' '+(x.body||'')).toUpperCase().includes(term))add('📧 Plantilla',x.title,x.subject||'','correo',()=>{showSection('correo');openItem('template',x.id);})});
+  scan((window.state&&state.drafts)||[],d=>{
+    scan(d.attachments,a=>{if((a.name||'').toUpperCase().includes(term))
+      // showSection('correo') asegura que la sección correcta se muestre sin importar dónde esté el usuario
+      add('📎 Adjunto',a.name,'En borrador: '+(d.title||'Sin título')+' · '+formatBytes(a.size||0),'correo',()=>{showSection('correo');loadDraft(d.id);previewFile(a.id);});
+    });
+  });
+  scan((window.state&&state.templates)||[],t=>{
+    scan(t.attachments,a=>{if((a.name||'').toUpperCase().includes(term))
+      add('📎 Adjunto',a.name,'En plantilla: '+(t.title||'Sin título')+' · '+formatBytes(a.size||0),'correo',()=>{showSection('correo');openItem('template',t.id);previewFile(a.id);});
+    });
+  });
+  return results.slice(0,40);
+}
+// Espera a que la sección recién mostrada termine de pintarse, hace scroll hasta el elemento
+// encontrado y lo resalta un momento para que sea evidente entre muchas tarjetas similares.
+function highlightSearchHit(selector){
+  setTimeout(()=>{
+    let el;
+    try{el=document.querySelector(selector);}catch(e){el=null;}
+    if(!el)return;
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    el.classList.add('search-hit-flash');
+    setTimeout(()=>el.classList.remove('search-hit-flash'),2400);
+  },120);
+}
+function renderSearchResults(results,box){
+  box.innerHTML=results.length
+    ? results.map((r,i)=>`<div class="col-12"><button type="button" class="global-search-item border rounded p-2 w-100 text-start bg-body" onclick="globalResultClick(${i})"><span class="badge text-bg-secondary me-2">${esc(r.type)}</span><strong>${esc(r.title)}</strong><div class="small-muted">${esc(r.desc||'')}</div></button></div>`).join('')
+    : '<div class="col-12 py-3 text-secondary">No se encontraron resultados.</div>';
+}
+function globalSearch(q){
+  const term=(q||'').trim().toUpperCase();
+  const overlay=document.getElementById('globalSearchOverlay');
+  const box=document.getElementById('globalSearchOverlayResults');
+  if(!overlay||!box)return;
+  if(!term){overlay.classList.add('d-none');box.innerHTML='';return;}
+  window._globalResults=computeSearchResults(term);
+  renderSearchResults(window._globalResults,box);
+  overlay.classList.remove('d-none');
+}
+// Buscador accesible desde el botón flotante (Ctrl+K): funciona sin importar la sección o el modal
+// que esté abierto, porque su propio modal de Bootstrap siempre queda apilado por encima.
+function openGlobalSearchModal(){
+  const modalEl=document.getElementById('globalSearchModal');
+  closeGlobalSearch();
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  const input=document.getElementById('globalSearchModalInput');
+  input.value='';
+  document.getElementById('globalSearchModalResults').innerHTML='<div class="col-12 py-3 text-secondary">Escribe para buscar en correo, tareas, notas, claves, procedimientos, responsables y cadenas — sin importar en qué sección estés.</div>';
+  modalEl.addEventListener('shown.bs.modal',()=>input.focus(),{once:true});
+}
+function globalSearchInModal(q){
+  const term=(q||'').trim().toUpperCase();
+  const box=document.getElementById('globalSearchModalResults');
+  if(!term){box.innerHTML='<div class="col-12 py-3 text-secondary">Escribe para buscar en correo, tareas, notas, claves, procedimientos, responsables y cadenas — sin importar en qué sección estés.</div>';return;}
+  window._globalResults=computeSearchResults(term);
+  renderSearchResults(window._globalResults,box);
+}
+function globalResultClick(i){
+  const r=window._globalResults?.[i];
+  closeGlobalSearch();
+  bootstrap.Modal.getInstance(document.getElementById('globalSearchModal'))?.hide();
+  if(r?.action)r.action();
+}
+function closeGlobalSearch(){document.getElementById('globalSearchOverlay')?.classList.add('d-none');}
+
+// Modo oscuro / claro, con preferencia recordada en este navegador
+function applyTheme(theme){
+  document.documentElement.setAttribute('data-bs-theme',theme);
+  const icon=document.querySelector('#themeToggleBtn i');
+  if(icon)icon.className=theme==='dark'?'bi bi-sun':'bi bi-moon-stars';
+  localStorage.setItem('co_theme',theme);
+}
+function toggleTheme(){
+  const current=document.documentElement.getAttribute('data-bs-theme')==='dark'?'dark':'light';
+  applyTheme(current==='dark'?'light':'dark');
+}
+(function initTheme(){
+  const saved=localStorage.getItem('co_theme');
+  const prefersDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved||(prefersDark?'dark':'light'));
+})();
+
+// Menú lateral compacto: por defecto solo se ven los iconos (gana espacio) y se expande
+// solo con pasar el mouse por encima — sin necesidad de dar clic — volviendo a su tamaño
+// compacto al quitar el mouse. El icono de chinche 📌, junto a "Centro Operativo", permite
+// dejarlo siempre abierto (fijo) si el usuario lo prefiere así; se recuerda la preferencia.
+function updateSidebarPinIcon(){
+  const btn=document.getElementById('sidebarPinBtn');
+  if(!btn)return;
+  const pinned=document.body.classList.contains('sidebar-pinned');
+  btn.innerHTML=pinned?'<i class="bi bi-pin-angle-fill"></i>':'<i class="bi bi-pin-angle"></i>';
+  btn.title=pinned?'Menú fijo — clic para volver al modo compacto':'Menú compacto (se expande con el mouse) — clic para dejarlo siempre abierto';
+}
+function toggleSidebarPin(){
+  document.body.classList.toggle('sidebar-pinned');
+  localStorage.setItem('co_sidebar_pinned',document.body.classList.contains('sidebar-pinned')?'1':'0');
+  updateSidebarPinIcon();
+}
+(function initSidebar(){
+  if(localStorage.getItem('co_sidebar_pinned')==='1')document.body.classList.add('sidebar-pinned');
+  updateSidebarPinIcon();
+})();
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();openGlobalSearchModal();}
+});
+
+
+function closeModalById(idName){
+  const el=document.getElementById(idName);
+  if(!el)return;
+  const inst=bootstrap.Modal.getInstance(el) || bootstrap.Modal.getOrCreateInstance(el);
+  inst.hide();
+}
+/* ===== CREDENCIALES ===== */
+const DEFAULT_CREDENTIALS = [
+  {name:'VPN',user:'monrecarga1.eglobal',password:'0sum1#wa\:lwYjQT1UWqD',note:'Acceso VPN'},
+  {name:'CALIDAD',user:'',password:'8883',note:''},
+  {name:'N2',user:'',password:'8407',note:''},
+  {name:'GMP',user:'',password:'8490',note:''},
+  {name:'SAC',user:'',password:'3860',note:''},
+  {name:'PAC COMPLETO SIN INTERNET',user:'',password:'7777',note:'Mesa de ayuda'},
+  {name:'SOPORTE REMOTO / MRA CONTINGENCIA',user:'',password:'8764',note:'Interfonía también a la *6108'},
+  {name:'MRA',user:'',password:'4625',note:''},
+  {name:'PAC',user:'',password:'4624',note:''},
+  {name:'PDV / LSR',user:'',password:'2421',note:''},
+  {name:'SOPORTE PAC',user:'soportepac',password:'S0p0rt3p4c.36**',note:''},
+  {name:'IMP PAC',user:'',password:'IMP*PAC*',note:''},
+  {name:'RAdmin',user:'',password:'',note:'IP: 172.23.48.1 / 172.17.121.63'},
+  {name:'MRAIII / Cívica',user:'',password:'Civica2025',note:'Software de gestión'},
+  {name:'MRAIII',user:'',password:'MRA2026*',note:''},
+  {name:'CIVICA',user:'',password:'Civica2025',note:''},
+  {name:'CORREO',user:'',password:'E-global25++',note:''},
+  {name:'RED',user:'',password:'E-global25++',note:''},
+  {name:'AWS',user:'',password:'Remoto2026*',note:''},
+  {name:'SAP',user:'XLPULGARIN',password:'Julio-agosto2026*',note:''},
+  {name:'MasterSheet',user:'mra.admin',password:'MRA@Admin',note:''},
+  {name:'MRA Consulta',user:'mra.consulta',password:'Metro2025*',note:'Solo consulta'},
+  {name:'MRA Administrador',user:'mra.admin',password:'MRA@Admin1',note:'Editar y eliminar'},
+  {name:'Admin PC',user:'.\\msoporte',password:'L4b0lg32023*',note:''},
+  {name:'NVR',user:'admin',password:'MetroMedellin*20',note:'Administrador'},
+  {name:'Pruebas Cámaras',user:'',password:'Camaras2025 - AEIOU123',note:''},
+  {name:'Correo Chima',user:'',password:'E-global.25**',note:''}
+];
+
+let credentials = JSON.parse(localStorage.getItem('co_credentials') || 'null');
+if(!credentials){
+  credentials = DEFAULT_CREDENTIALS.map(x=>({id:id(),...x,created:Date.now(),updated:Date.now()}));
+  localStorage.setItem('co_credentials',JSON.stringify(credentials));
+}
+function persistCredentials(){localStorage.setItem('co_credentials',JSON.stringify(credentials));}
+
+function renderCredentials(){
+  const grid=document.getElementById('credentialsGrid'); if(!grid)return;
+  if(!credentials.length){
+    grid.innerHTML='<div class="col-12"><div class="dropzone">No hay claves guardadas.</div></div>'; return;
+  }
+  grid.innerHTML=credentials.map(c=>`
+    <div class="col-6 col-md-3 col-xl-2">
+      <div class="card credential-card h-100 border drag-card" draggable="false" data-drag-id="${escAttr(c.id)}">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <h6 class="mb-1"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-key-fill text-warning me-1"></i>${esc(c.name)}</h6>
+            ${c.user?`<div class="small-muted"><i class="bi bi-person"></i> ${esc(c.user)}</div>`:''}
+          </div>
+          <div class="btn-group btn-group-sm">
+            <button type="button" class="btn btn-outline-primary js-cred-edit" data-id="${escAttr(c.id)}" title="Editar"><i class="bi bi-pencil"></i></button>
+            <button type="button" class="btn btn-outline-danger js-cred-delete" data-id="${escAttr(c.id)}" title="Eliminar"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+        <div class="input-group input-group-sm mt-3">
+          <input id="pass_${escAttr(c.id)}" class="form-control" type="password" value="${escAttr(c.password||'')}" readonly>
+          <button type="button" class="btn btn-outline-secondary js-cred-toggle" data-id="${escAttr(c.id)}"><i class="bi bi-eye"></i></button>
+          <button type="button" class="btn btn-warning js-cred-copy" data-id="${escAttr(c.id)}"><i class="bi bi-copy"></i> Copiar</button>
+        </div>
+        ${c.note?`<div class="small-muted mt-2"><i class="bi bi-info-circle"></i> ${esc(c.note)}</div>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function addCredential(){
+  credentialId.value='';credentialName.value='';credentialUser.value='';credentialPassword.value='';credentialNote.value='';
+  document.getElementById('credentialModalTitle').textContent='Nueva clave';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('credentialModal')).show();
+}
+function editCredential(credentialIdValue){
+  const c=credentials.find(x=>String(x.id)===String(credentialIdValue));if(!c)return;
+  credentialId.value=c.id;credentialName.value=c.name;credentialUser.value=c.user||'';credentialPassword.value=c.password||'';credentialNote.value=c.note||'';
+  document.getElementById('credentialModalTitle').textContent='Editar clave';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('credentialModal')).show();
+}
+function saveCredential(){
+  const name=document.getElementById('credentialName').value.trim();
+  if(!name){showToast('Escribe el nombre del aplicativo','info');return;}
+  const cid=document.getElementById('credentialId').value;
+  const data={name,user:document.getElementById('credentialUser').value.trim(),password:document.getElementById('credentialPassword').value,note:document.getElementById('credentialNote').value.trim(),updated:Date.now()};
+  if(cid){
+    const c=credentials.find(x=>String(x.id)===String(cid));
+    if(c)Object.assign(c,data); else credentials.unshift({id:cid,created:Date.now(),...data});
+  }else credentials.unshift({id:id(),created:Date.now(),...data});
+  persistCredentials();renderCredentials();closeModalById('credentialModal');showToast(cid?'Clave actualizada':'Clave agregada');
+}
+
+document.addEventListener('click',function(e){
+  const credDel=e.target.closest('.js-cred-delete');
+  if(credDel){
+    e.preventDefault(); e.stopPropagation();
+    deleteCredential(credDel.dataset.id); return;
+  }
+  const credEdit=e.target.closest('.js-cred-edit');
+  if(credEdit){e.preventDefault();editCredential(credEdit.dataset.id);return;}
+  const credCopy=e.target.closest('.js-cred-copy');
+  if(credCopy){e.preventDefault();copyCredential(credCopy.dataset.id);return;}
+  const credToggle=e.target.closest('.js-cred-toggle');
+  if(credToggle){e.preventDefault();togglePass(credToggle.dataset.id);return;}
+
+  const extDel=e.target.closest('.js-ext-delete');
+  if(extDel){e.preventDefault();e.stopPropagation();deleteExtension(extDel.dataset.id);return;}
+  const extEdit=e.target.closest('.js-ext-edit');
+  if(extEdit){e.preventDefault();editExtension(extEdit.dataset.id);return;}
+  const extCopy=e.target.closest('.js-ext-copy');
+  if(extCopy){e.preventDefault();const x=extensions.find(a=>String(a.id)===String(extCopy.dataset.id));if(x)copyText(x.number);return;}
+});
+
+function deleteCredential(cid){
+  const index=credentials.findIndex(x=>String(x.id)===String(cid));
+  if(index<0){showToast('No se encontró la clave','info');return;}
+  const c=credentials[index];
+  // eliminación directa
+  credentials.splice(index,1);
+  try{persistCredentials();renderCredentials();showToast('Clave eliminada');}catch(err){console.error(err);showToast('No se pudo guardar el cambio','info');}
+}
+function deleteExtension(xid){
+  const index=extensions.findIndex(x=>String(x.id)===String(xid));
+  if(index<0){showToast('No se encontró la extensión','info');return;}
+  const x=extensions[index];
+  // eliminación directa
+  extensions.splice(index,1);
+  try{persistOperations();renderExtensions();}catch(err){console.error(err);showToast('No se pudo guardar el cambio','info');}
+}
+
+function togglePass(cid){
+  const el=document.getElementById('pass_'+cid);if(el)el.type=el.type==='password'?'text':'password';
+}
+async function copyCredential(cid){
+  const c=credentials.find(x=>String(x.id)===String(cid));if(!c)return;
+  copyText(c.password||'','Clave copiada');
+}
+
+function dbGetAll(){
+  return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
+    const req=db.transaction(STORE,'readonly').objectStore(STORE).getAll();
+    req.onsuccess=()=>resolve(req.result||[]);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function exportData(){
+  try{
+    showToast('Generando respaldo, puede tardar unos segundos...');
+    const attachments=await dbGetAll();
+    const payload={version:2,templates:state.templates,drafts:state.drafts,tasks:state.tasks,notes:state.notes,credentials,extensions,procedures,responsibles,chains,attachments,exportedAt:new Date().toISOString()};
+    const blob=new Blob([JSON.stringify(payload)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='centro-operaciones-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();URL.revokeObjectURL(a.href);
+    showToast('Respaldo descargado ('+attachments.length+' adjunto(s) incluidos)');
+  }catch(err){console.error('exportData:',err);showToast('No se pudo generar el respaldo','danger');}
+}
+document.getElementById('importFileInput').addEventListener('change', async e=>{
+  const file=e.target.files[0]; e.target.value='';
+  if(!file) return;
+  if(!confirm('Esto reemplazará TODOS los datos guardados en este navegador (plantillas, borradores, tareas, notas, claves, procedimientos, responsables, cadenas y adjuntos) por los del archivo de respaldo. Esta acción no se puede deshacer. ¿Deseas continuar?')) return;
+  try{
+    const text=await file.text();
+    const data=JSON.parse(text);
+    if(!data||typeof data!=='object') throw new Error('Formato inválido');
+    localStorage.setItem('co_templates', JSON.stringify(data.templates||[]));
+    localStorage.setItem('co_drafts', JSON.stringify(data.drafts||[]));
+    localStorage.setItem('co_tasks', JSON.stringify(data.tasks||[]));
+    localStorage.setItem('co_notes', JSON.stringify(data.notes||[]));
+    localStorage.setItem('co_credentials', JSON.stringify(data.credentials||[]));
+    localStorage.setItem('co_extensions', JSON.stringify(data.extensions||[]));
+    localStorage.setItem('co_procedures', JSON.stringify(data.procedures||[]));
+    localStorage.setItem('co_responsibles', JSON.stringify(data.responsibles||[]));
+    localStorage.setItem('co_chains', JSON.stringify(data.chains||[]));
+    if(Array.isArray(data.attachments)&&db){
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction(STORE,'readwrite');
+        const store=tx.objectStore(STORE);
+        store.clear();
+        data.attachments.forEach(item=>store.put(item));
+        tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error||new Error('Fallo al restaurar adjuntos'));
+      });
+    }
+    showToast('Respaldo importado. Recargando...');
+    setTimeout(()=>location.reload(), 900);
+  }catch(err){
+    console.error('importBackup:',err);
+    showToast('El archivo de respaldo no es válido o está dañado','danger');
+  }
+});
+function iconFor(type){
+  if(type==='application/pdf')return 'bi-file-earmark-pdf text-danger';
+  if(type.includes('sheet')||type.includes('excel')||type.includes('csv'))return 'bi-file-earmark-spreadsheet text-success';
+  if(type.startsWith('image/'))return 'bi-file-earmark-image text-primary';
+  return 'bi-file-earmark-text';
+}
+function formatBytes(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB'}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
+
+initDB().then(()=>{updateStats();renderTemplates();renderTasks();renderNotes();renderCredentials();renderExtensions();renderProcedures();renderResponsibles();renderChains();globalSearch('');closeGlobalSearch();if(!state.drafts.length)newDraft();else loadDraft(state.drafts[0].id)}).catch(err=>{console.error('IndexedDB:',err);showToast('No se pudo inicializar el almacenamiento de archivos','danger');});
+
+(function(){
+  const input=document.getElementById('globalSearch');
+  if(input){input.addEventListener('input',()=>globalSearch(input.value));input.addEventListener('focus',()=>{if(input.value.trim())globalSearch(input.value);});}
+})();
+</script>
+<!-- OVERRIDE CONFIRMACIONES Y BOTONES -->
+<script>
+(function(){
+  const style=document.createElement('style');
+  style.textContent='.task-actions{display:flex;gap:.5rem;align-items:center;flex-shrink:0;flex-wrap:wrap}.task-actions .btn{min-width:72px}.template-actions{display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;justify-content:flex-end}.template-actions .btn{padding:.2rem .5rem;font-size:.8rem}';
+  document.head.appendChild(style);
+
+  function ensureDeleteModal(){
+    if(document.getElementById('deleteConfirmModal')) return document.getElementById('deleteConfirmModal');
+    const d=document.createElement('div'); d.id='deleteConfirmModal'; d.className='modal fade'; d.tabIndex=-1;
+    d.innerHTML='<div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="deleteConfirmTitle">Confirmar eliminación</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><p id="deleteConfirmMessage" class="mb-0">¿Deseas eliminar este elemento?</p></div><div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button type="button" class="btn btn-danger" id="deleteConfirmBtn">Sí, eliminar</button></div></div></div>';
+    document.body.appendChild(d); return d;
+  }
+  window.askDelete=function(title,message,callback){
+    const d=ensureDeleteModal(); document.getElementById('deleteConfirmTitle').textContent=title||'Confirmar eliminación'; document.getElementById('deleteConfirmMessage').textContent=message||'¿Deseas eliminar este elemento?';
+    const b=document.getElementById('deleteConfirmBtn'); b.onclick=function(){const m=bootstrap.Modal.getOrCreateInstance(d);m.hide();if(callback)callback();}; bootstrap.Modal.getOrCreateInstance(d).show();
+  };
+
+  // Plantillas: botones Editar/Eliminar y edición real desde el editor.
+  window.editingTemplateId='';
+  window.newTemplate=function(){editingTemplateId='';document.getElementById('templateName').value='';bootstrap.Modal.getOrCreateInstance(document.getElementById('templateModal')).show();};
+  window.editTemplate=function(id){const t=state.templates.find(x=>String(x.id)===String(id));if(!t)return;editingTemplateId=String(id);showSection('correo');draftId.value='';document.getElementById('draftTitle').value=t.title||'';to.value=t.to||'';cc.value=t.cc||'';subject.value=t.subject||'';body.innerHTML=t.body||'';currentAttachments=t.attachments||[];renderAttachments();saveStatus.textContent='Editando plantilla';};
+  window.deleteTemplate=function(id){const t=state.templates.find(x=>String(x.id)===String(id));if(!t)return;askDelete('Eliminar plantilla','¿Deseas eliminar la plantilla "'+(t.title||'Sin título')+'"?',function(){state.templates=state.templates.filter(x=>String(x.id)!==String(id));persist();renderTemplates();showToast('Plantilla eliminada');});};
+  window.renderTemplates=function(){
+    const q=(templateSearch.value||'').toLowerCase();
+    const items=[...state.templates.filter(t=>(t.title+' '+t.subject).toLowerCase().includes(q)).map(t=>({type:'template',...t})),...state.drafts.filter(d=>((d.title||'')+' '+(d.subject||'')).toLowerCase().includes(q)).map(d=>({type:'draft',title:d.title||'Borrador sin título',...d}))];
+    // Orden manual guardado por el usuario (arrastrar y soltar); los elementos nuevos, sin orden guardado, quedan al final.
+    const orderIndex=new Map((state.itemOrder||[]).map((k,i)=>[k,i]));
+    items.sort((a,b)=>{
+      const ia=orderIndex.has(a.type+':'+a.id)?orderIndex.get(a.type+':'+a.id):Infinity;
+      const ib=orderIndex.has(b.type+':'+b.id)?orderIndex.get(b.type+':'+b.id):Infinity;
+      return ia-ib;
+    });
+    templateList.innerHTML=items.length?items.map(x=>'<div class="list-group-item template-item" draggable="false" data-key="'+x.type+':'+escAttr(x.id)+'"><div class="d-flex align-items-start gap-2"><span class="drag-handle" title="Arrastra para reordenar"><i class="bi bi-grip-vertical"></i></span><div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-2 flex-grow-1" style="min-width:0"><div class="flex-grow-1" onclick="openItem(\''+x.type+'\',\''+escAttr(x.id)+'\')" style="cursor:pointer;min-width:0"><strong>'+esc(x.title||x.subject||'Sin título')+'</strong><div class="small-muted text-truncate">'+esc(x.subject||'Sin asunto')+'</div></div><div class="template-actions">'+(x.type==='template'?'<button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();editTemplate(\''+escAttr(x.id)+'\')">Editar</button><button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();deleteTemplate(\''+escAttr(x.id)+'\')">Eliminar</button>':'<button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();deleteDraft(\''+escAttr(x.id)+'\')">Eliminar</button>')+'<span class="badge '+(x.type==='template'?'text-bg-primary':'text-bg-warning')+' align-self-center">'+(x.type==='template'?'Plantilla':'Borrador')+'</span></div></div></div></div>').join(''):'<div class="p-4 text-center text-secondary">No hay elementos.</div>';
+  };
+  // Arrastrar y soltar para reordenar "Plantillas y borradores" a gusto del usuario.
+  (function setupTemplateDragAndDrop(){
+    const list=document.getElementById('templateList');
+    if(!list)return;
+    let dragKey=null;
+    list.addEventListener('dragstart',e=>{
+      const item=e.target.closest('.template-item'); if(!item)return;
+      dragKey=item.dataset.key; item.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragKey);}catch(err){}
+    });
+    list.addEventListener('dragend',()=>{list.querySelectorAll('.template-item').forEach(el=>el.classList.remove('dragging','drag-over'));dragKey=null;});
+    list.addEventListener('dragover',e=>{
+      const item=e.target.closest('.template-item'); if(!item||!dragKey)return;
+      e.preventDefault();
+      list.querySelectorAll('.template-item').forEach(el=>el.classList.remove('drag-over'));
+      if(item.dataset.key!==dragKey)item.classList.add('drag-over');
+    });
+    list.addEventListener('drop',e=>{
+      const item=e.target.closest('.template-item'); if(!item||!dragKey)return;
+      e.preventDefault(); item.classList.remove('drag-over');
+      if(item.dataset.key===dragKey)return;
+      const dragEl=list.querySelector('.template-item[data-key="'+CSS.escape(dragKey)+'"]');
+      if(!dragEl)return;
+      const rect=item.getBoundingClientRect();
+      const before=(e.clientY-rect.top)<rect.height/2;
+      if(before)list.insertBefore(dragEl,item); else list.insertBefore(dragEl,item.nextSibling);
+      const visibleKeys=[...list.querySelectorAll('.template-item')].map(el=>el.dataset.key);
+      const visibleSet=new Set(visibleKeys);
+      const preserved=(state.itemOrder||[]).filter(k=>!visibleSet.has(k));
+      state.itemOrder=[...visibleKeys,...preserved];
+      persist();
+    });
+  })();
+  // Arrastrar y soltar genérico, reutilizado en Notas, Credenciales, Extensiones,
+  // Procedimientos, Responsables y Cadenas (cada una es un arreglo simple, a diferencia
+  // de Plantillas/Borradores que combina dos tipos distintos).
+  function setupGridDragReorder(containerId,getArray,onReorder){
+    const container=document.getElementById(containerId);
+    if(!container)return;
+    let dragId=null;
+    container.addEventListener('dragstart',e=>{
+      const item=e.target.closest('.drag-card'); if(!item)return;
+      dragId=item.dataset.dragId; item.classList.add('dragging');
+      e.dataTransfer.effectAllowed='move'; try{e.dataTransfer.setData('text/plain',dragId);}catch(err){}
+    });
+    container.addEventListener('dragend',()=>{container.querySelectorAll('.drag-card').forEach(el=>el.classList.remove('dragging','drag-over'));dragId=null;});
+    container.addEventListener('dragover',e=>{
+      const item=e.target.closest('.drag-card'); if(!item||!dragId||item.dataset.dragId===dragId)return;
+      e.preventDefault();
+      container.querySelectorAll('.drag-card').forEach(el=>el.classList.remove('drag-over'));
+      item.classList.add('drag-over');
+    });
+    container.addEventListener('drop',e=>{
+      const item=e.target.closest('.drag-card'); if(!item||!dragId)return;
+      e.preventDefault(); item.classList.remove('drag-over');
+      const targetId=item.dataset.dragId;
+      if(targetId===dragId)return;
+      const arr=getArray();
+      const fromIdx=arr.findIndex(x=>String(x.id)===String(dragId));
+      let toIdx=arr.findIndex(x=>String(x.id)===String(targetId));
+      if(fromIdx<0||toIdx<0)return;
+      const [moved]=arr.splice(fromIdx,1);
+      if(fromIdx<toIdx)toIdx--;
+      arr.splice(toIdx,0,moved);
+      onReorder();
+    });
+  }
+  setupGridDragReorder('notesGrid',()=>state.notes,()=>{persist();renderNotes();});
+  setupGridDragReorder('credentialsGrid',()=>credentials,()=>{persistCredentials();renderCredentials();});
+  setupGridDragReorder('extensionsGrid',()=>extensions,()=>{persistOperations();renderExtensions();});
+  setupGridDragReorder('proceduresGrid',()=>procedures,()=>{persistOperations();renderProcedures();});
+  setupGridDragReorder('responsiblesGrid',()=>responsibles,()=>{persistOperations();renderResponsibles();});
+  setupGridDragReorder('chainsGrid',()=>chains,()=>{persistOperations();renderChains();});
+
+  // Recordatorios de tareas del tablero: alerta fija abajo a la derecha que NO se cierra sola,
+  // más una notificación nativa del navegador (si el usuario la permite) que aparece sin importar
+  // en qué pestaña esté, mientras esta pestaña/ventana siga abierta.
+  function ensureReminderHost(){
+    let host=document.getElementById('reminderHost');
+    if(!host){
+      host=document.createElement('div');
+      host.id='reminderHost';
+      host.style.cssText='position:fixed;right:20px;bottom:20px;z-index:200000;display:flex;flex-direction:column-reverse;gap:10px;max-width:360px;';
+      document.body.appendChild(host);
+    }
+    return host;
+  }
+  // Título de la pestaña parpadeando ("titile"): mientras haya al menos un aviso sin cerrar,
+  // el título de la pestaña alterna con el texto original cada segundo. Así, aunque estés en
+  // OTRA pestaña del mismo navegador, la pestaña de esta app se ve parpadeando en la barra
+  // de pestañas y llama la atención sin depender del permiso de notificaciones del sistema.
+  // (Si cambiaste a OTRO PROGRAMA por completo —no otra pestaña—, lo único que puede avisarte
+  // ahí es la notificación nativa del sistema operativo, que depende del permiso otorgado.)
+  const _originalTitle=document.title;
+  let _titleBlinkTimer=null;
+  function startTitleBlink(){
+    if(_titleBlinkTimer)return;
+    let flip=false;
+    _titleBlinkTimer=setInterval(()=>{
+      const count=document.querySelectorAll('#reminderHost .reminder-alert').length;
+      if(count===0){clearInterval(_titleBlinkTimer);_titleBlinkTimer=null;document.title=_originalTitle;return;}
+      document.title=flip?_originalTitle:('🔔 ('+count+') Tarea pendiente');
+      flip=!flip;
+    },1000);
+  }
+  // El aviso se repite cada 5 minutos mientras la tarea siga sin marcarse como "Hecha",
+  // y desaparece de inmediato en cuanto el usuario hace clic en él (cerrar o marcar como hecha).
+  const TASK_REMINDER_REPEAT_MS=5*60*1000;
+  function showPersistentReminder(task){
+    const host=ensureReminderHost();
+    // Evita apilar dos avisos de la misma tarea a la vez.
+    host.querySelectorAll('[data-reminder-task="'+CSS.escape(String(task.id))+'"]').forEach(el=>el.remove());
+    const box=document.createElement('div');
+    box.className='reminder-alert';
+    box.dataset.reminderTask=String(task.id);
+    box.innerHTML='<div class="d-flex justify-content-between align-items-start gap-2"><div class="me-2"><div class="fw-bold"><i class="bi bi-alarm-fill text-danger me-1"></i>Es hora de: '+esc(task.title)+'</div>'+(task.desc?'<div class="small-muted mt-1">'+esc(task.desc)+'</div>':'')+'<button type="button" class="btn btn-sm btn-success mt-2 js-reminder-done"><i class="bi bi-check-lg"></i> Marcar como hecha</button></div><button type="button" class="btn-close" aria-label="Cerrar"></button></div>';
+    box.querySelector('.btn-close').onclick=()=>box.remove();
+    box.querySelector('.js-reminder-done').onclick=()=>{
+      const t=(state.tasks||[]).find(x=>String(x.id)===String(task.id));
+      if(t){t.status='hecho';t.updated=Date.now();persist();renderTasks();showToast('Tarea marcada como hecha');}
+      box.remove();
+    };
+    host.appendChild(box);
+    startTitleBlink();
+  }
+  function checkTaskReminders(){
+    let changed=false;
+    (state.tasks||[]).forEach(t=>{
+      if(!t.dueAt||t.status==='hecho')return;
+      if(new Date(t.dueAt).getTime()>Date.now())return;
+      const last=t.lastNotifiedAt||0;
+      if(last&&(Date.now()-last)<TASK_REMINDER_REPEAT_MS)return; // ya se avisó hace poco, espera al próximo ciclo
+      t.lastNotifiedAt=Date.now(); changed=true;
+      showPersistentReminder(t);
+      if(window.Notification&&Notification.permission==='granted'){
+        try{
+          // renotify:true es clave: sin esto, como reusamos el mismo "tag" cada vez que la
+          // tarea se repite, el sistema operativo actualizaba la notificación EN SILENCIO
+          // (sin volver a mostrar el aviso ni sonar) en lugar de alertar de nuevo.
+          const n=new Notification('⏰ '+t.title,{body:t.desc||'Sigue pendiente — aún no la has marcado como hecha',requireInteraction:true,tag:'task-'+t.id,renotify:true});
+          n.onclick=()=>{window.focus();showSection('tareas');};
+        }catch(e){}
+      }
+    });
+    if(changed){persist();renderTasks();}
+  }
+  setInterval(checkTaskReminders,20000);
+  setTimeout(checkTaskReminders,3000); // por si el navegador estaba cerrado a la hora programada
+  // Botón "Probar aviso": dispara ahora mismo el mismo mecanismo (recuadro + parpadeo de
+  // pestaña + notificación nativa si está permitida), para comprobar de inmediato si todo
+  // funciona sin tener que esperar a que llegue la hora de una tarea real.
+  window.testNotification=function(){
+    showPersistentReminder({id:'prueba-'+Date.now(),title:'Esto es una prueba',desc:'Si ves esto y (si activaste notificaciones) también un aviso del sistema, todo funciona correctamente.'});
+    if(!window.Notification){showToast('Este navegador no admite notificaciones del sistema','danger');return;}
+    if(Notification.permission==='granted'){
+      try{new Notification('⏰ Esto es una prueba',{body:'Notificación del sistema operativo funcionando correctamente.',requireInteraction:true,tag:'prueba-'+Date.now()});}catch(e){}
+    }else if(Notification.permission==='denied'){
+      showToast('Las notificaciones del sistema están bloqueadas para esta página. Debes habilitarlas manualmente desde los ajustes del navegador (candado junto a la dirección) y también revisar que las notificaciones de este navegador no estén desactivadas en la configuración de Windows.','danger');
+    }else{
+      Notification.requestPermission().then(updateNotifBtn);
+    }
+  };
+  window.requestNotifPermission=function(){
+    if(!window.Notification){showToast('Este navegador no admite notificaciones','danger');return;}
+    Notification.requestPermission().then(updateNotifBtn);
+  };
+  function updateNotifBtn(){
+    const btn=document.getElementById('notifPermBtn'); if(!btn||!window.Notification)return;
+    if(Notification.permission==='granted'){btn.innerHTML='<i class="bi bi-bell-fill text-success"></i> Notificaciones activadas';btn.disabled=true;}
+    else if(Notification.permission==='denied'){btn.innerHTML='<i class="bi bi-bell-slash"></i> Notificaciones bloqueadas';btn.disabled=true;btn.title='Las habilitaste en "bloqueado" desde el navegador; actívalas desde los ajustes del sitio.';}
+  }
+  updateNotifBtn();
+  // Los navegadores exigen que el permiso de notificaciones se pida a partir de una acción
+  // real del usuario (clic), por seguridad — ninguna página puede activarlo por su cuenta sin
+  // que la persona haga algo primero. Para que se sienta "automático" y no dependas de encontrar
+  // el botón, se aprovecha el primer clic que hagas en cualquier parte de la app (el que sea)
+  // para pedir el permiso una sola vez, si todavía no se ha decidido.
+  document.addEventListener('click',function autoRequestNotifOnce(){
+    if(window.Notification&&Notification.permission==='default'){
+      try{Notification.requestPermission().then(updateNotifBtn);}catch(e){}
+    }
+    document.removeEventListener('click',autoRequestNotifOnce);
+  },{once:true});
+  window.openItem=function(type,id){if(type==='draft'){editingTemplateId='';loadDraft(id);return;}editTemplate(id);};
+  window.saveCurrentDraft=function(){
+    const data={title:(document.getElementById('draftTitle')?.value||'').trim(),to:to.value.trim(),cc:cc.value.trim(),subject:subject.value.trim(),body:body.innerHTML,attachments:currentAttachments,updated:Date.now()};
+    if(editingTemplateId){const t=state.templates.find(x=>String(x.id)===String(editingTemplateId));if(t){Object.assign(t,data);persist();renderTemplates();saveStatus.textContent='Plantilla guardada '+new Date().toLocaleTimeString();showToast('Plantilla actualizada');return;}}
+    const d=state.drafts.find(x=>x.id===draftId.value);if(!d){newDraft();return;}Object.assign(d,data);persist();saveStatus.textContent='Guardado '+new Date().toLocaleTimeString();renderTemplates();
+  };
+
+  // Confirmaciones de eliminación.
+  window.deleteCurrentDraft=function(){if(!draftId.value)return;askDelete('Eliminar borrador','¿Deseas eliminar este borrador?',function(){state.drafts=state.drafts.filter(x=>x.id!==draftId.value);persist();newDraft();showToast('Borrador eliminado');});};
+  window.deleteTask=function(id){const t=state.tasks.find(x=>String(x.id)===String(id));if(!t)return;askDelete('Eliminar tarea','¿Deseas eliminar la tarea "'+(t.title||'Sin título')+'"?',function(){state.tasks=state.tasks.filter(x=>String(x.id)!==String(id));persist();renderTasks();showToast('Tarea eliminada');});};
+  window.deleteNote=function(id){const n=state.notes.find(x=>String(x.id)===String(id));if(!n)return;askDelete('Eliminar nota','¿Deseas eliminar la nota "'+(n.title||'Sin título')+'"?',function(){state.notes=state.notes.filter(x=>String(x.id)!==String(id));persist();renderNotes();showToast('Nota eliminada');});};
+  window.deleteProcedure=async function(id){const p=procedures.find(x=>String(x.id)===String(id));if(!p)return;askDelete('Eliminar procedimiento','¿Deseas eliminar el procedimiento "'+(p.name||'Sin nombre')+'"?',async function(){try{if(p.fileId)await dbDelete(p.fileId);}catch(e){}procedures=procedures.filter(x=>String(x.id)!==String(id));persistOperations();renderProcedures();showToast('Procedimiento eliminado');});};
+  window.deleteResponsible=function(id){const r=responsibles.find(x=>String(x.id)===String(id));if(!r)return;askDelete('Eliminar responsable','¿Deseas eliminar a "'+(r.name||'este responsable')+'"?',function(){responsibles=responsibles.filter(x=>String(x.id)!==String(id));persistOperations();renderResponsibles();showToast('Responsable eliminado');});};
+  window.deleteChain=async function(id){const c=chains.find(x=>String(x.id)===String(id));if(!c)return;askDelete('Eliminar cadena de llamadas','¿Deseas eliminar la cadena "'+(c.name||'Sin nombre')+'"?',async function(){try{if(c.fileId)await dbDelete(c.fileId);}catch(e){}chains=chains.filter(x=>String(x.id)!==String(id));persistOperations();renderChains();showToast('Cadena eliminada');});};
+  window.deleteCredential=function(id){const i=credentials.findIndex(x=>String(x.id)===String(id));if(i<0)return;const c=credentials[i];askDelete('Eliminar clave','¿Deseas eliminar la clave "'+(c.name||'Sin nombre')+'"?',function(){credentials.splice(i,1);persistCredentials();renderCredentials();showToast('Clave eliminada');});};
+  window.deleteExtension=function(id){const i=extensions.findIndex(x=>String(x.id)===String(id));if(i<0)return;const x=extensions[i];askDelete('Eliminar extensión','¿Deseas eliminar la extensión "'+(x.name||x.number||'Sin nombre')+'"?',function(){extensions.splice(i,1);persistOperations();renderExtensions();showToast('Extensión eliminada');});};
+
+  // Tablero: botones separados visualmente.
+  const oldRenderTasks=window.renderTasks;
+  window.renderTasks=function(){oldRenderTasks();document.querySelectorAll('.task-card .btn-group.btn-group-sm').forEach(g=>{g.className='task-actions';g.style.gap='.5rem';g.querySelectorAll('button').forEach(b=>{b.classList.remove('btn-link','p-0');b.classList.add('btn','btn-sm');if(b.classList.contains('text-primary'))b.classList.add('btn-outline-primary');if(b.classList.contains('text-danger'))b.classList.add('btn-outline-danger');});});};
+
+  // Evita prompt/confirm del navegador si queda algún flujo antiguo; las eliminaciones usan askDelete.
+  window.addEventListener('DOMContentLoaded',function(){ensureDeleteModal();setTimeout(function(){if(window.renderTemplates)renderTemplates();if(window.renderTasks)renderTasks();},0);});
+})();
+
+</script>
+</body>
+</html>
