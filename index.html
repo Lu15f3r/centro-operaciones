@@ -111,9 +111,35 @@
   .email-editor{min-height:300px;overflow:auto;white-space:pre-wrap}.email-editor:empty:before{content:attr(data-placeholder);color:#6c757d}.email-editor img{max-width:100%;height:auto;display:block;margin:8px 0}.email-editor:focus{box-shadow:0 0 0 .2rem rgba(13,110,253,.12);border-color:#86b7fe}
   .note-editor{overflow:auto}.note-editor:empty:before{content:attr(data-placeholder);color:#6c757d}.note-editor:focus{box-shadow:0 0 0 .2rem rgba(13,110,253,.12);border-color:#86b7fe}
   .note-rich-content{overflow-wrap:break-word}.note-rich-content ul,.note-rich-content ol{padding-left:1.4rem}
+  /* La app entera queda oculta hasta iniciar sesión con Supabase; ver <body class="authed"> */
+  body:not(.authed) .sidebar, body:not(.authed) .main { display:none !important; }
+  #authScreen { display:none; }
+  body:not(.authed) #authScreen { display:flex; }
 </style>
 </head>
 <body>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<!-- PANTALLA DE LOGIN: cubre toda la app hasta que Supabase confirme la sesión -->
+<div id="authScreen" style="position:fixed;inset:0;z-index:999999;background:#0f172a;align-items:center;justify-content:center;">
+  <div class="card p-4" style="width:360px;max-width:92vw;">
+    <div class="text-center mb-3">
+      <i class="bi bi-grid-1x2-fill text-primary" style="font-size:2rem"></i>
+      <h5 class="mt-2 mb-0">Centro Operativo</h5>
+      <div class="small-muted">Inicia sesión para continuar</div>
+    </div>
+    <div id="authError" class="alert alert-danger py-2 d-none"></div>
+    <div id="authPendingMsg" class="alert alert-warning py-2 d-none">Tu cuenta fue creada pero todavía no tienes ninguna pestaña habilitada. Pídele al administrador que te dé acceso.</div>
+    <form id="authForm" onsubmit="event.preventDefault();doLogin();">
+      <label class="form-label small-muted mb-1">Correo</label>
+      <input id="authEmail" type="email" class="form-control mb-2" required autocomplete="username">
+      <label class="form-label small-muted mb-1">Contraseña</label>
+      <input id="authPassword" type="password" class="form-control mb-3" required autocomplete="current-password">
+      <button type="submit" id="authSubmitBtn" class="btn btn-primary w-100">Iniciar sesión</button>
+    </form>
+    <button id="authLogoutFromPending" class="btn btn-outline-secondary w-100 mt-2 d-none" onclick="doLogout()">Cerrar sesión</button>
+  </div>
+</div>
 
 <aside class="sidebar">
   <div class="brand"><div class="brand-label"><i class="bi bi-grid-1x2-fill me-2"></i><span>Centro Operativo</span></div><button type="button" id="sidebarPinBtn" class="btn btn-sm btn-link p-0" onclick="toggleSidebarPin()" title="Fijar menú abierto"><i class="bi bi-pin-angle"></i></button></div>
@@ -128,6 +154,7 @@
     <a class="nav-link" href="#" data-section="responsables"><i class="bi bi-person-badge me-2"></i><span>Responsables</span></a>
     <a class="nav-link" href="#" data-section="cadenas"><i class="bi bi-diagram-3 me-2"></i><span>Cadena de llamadas</span></a>
     <a class="nav-link" href="#" data-section="instaladores"><i class="bi bi-hdd-stack me-2"></i><span>Instaladores</span></a>
+    <a class="nav-link d-none" id="navUsuarios" href="#" data-section="usuarios"><i class="bi bi-people me-2"></i><span>Usuarios</span></a>
   </nav>
 </aside>
 
@@ -152,7 +179,8 @@
         </div>
       </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 align-items-center">
+      <span id="authUserBadge" class="small-muted me-1 d-none d-md-inline"></span>
       <button class="btn btn-outline-secondary btn-sm" id="themeToggleBtn" onclick="toggleTheme()" title="Cambiar tema"><i class="bi bi-moon-stars"></i></button>
       <button class="btn btn-outline-secondary btn-sm" onclick="exportData()"><i class="bi bi-download"></i> Exportar</button>
       <label class="btn btn-outline-secondary btn-sm mb-0">
@@ -160,6 +188,7 @@
         <input id="importFileInput" type="file" accept="application/json,.json" hidden>
       </label>
       <button class="btn btn-primary btn-sm" onclick="newDraft()"><i class="bi bi-plus-lg"></i> Nuevo correo</button>
+      <button class="btn btn-outline-danger btn-sm" onclick="doLogout()" title="Cerrar sesión"><i class="bi bi-box-arrow-right"></i></button>
     </div>
   </header>
 
@@ -436,6 +465,22 @@
         <div class="col-md-4 text-md-end small-muted" id="installerTotalSize"></div>
       </div>
       <div id="installersGrid" class="row g-3"></div>
+    </section>
+
+    <!-- USUARIOS (solo administradores): habilitar/quitar pestañas, cambiar rol, quitar acceso -->
+    <section id="usuarios" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <h5 class="mb-1"><i class="bi bi-people text-primary"></i> Usuarios y permisos</h5>
+        <div class="small-muted">Controla a qué pestañas tiene acceso cada persona. Los cambios se guardan de inmediato.</div>
+      </div>
+      <div class="alert alert-info d-flex align-items-start gap-2">
+        <i class="bi bi-info-circle mt-1"></i>
+        <div>
+          Para crear un usuario nuevo (correo + contraseña), hazlo una sola vez desde el panel de Supabase: <strong>Authentication → Users → Add user</strong>. Apenas esa persona inicie sesión por primera vez aquí, va a aparecer automáticamente en esta lista sin acceso a nada — desde aquí le activas las pestañas que necesite.
+          <div class="mt-1">Eliminar a alguien de esta lista le quita el acceso a la app, pero su usuario/contraseña sigue existiendo en Supabase (para borrarlo por completo, hazlo también desde Authentication → Users allá).</div>
+        </div>
+      </div>
+      <div id="usersList" class="d-flex flex-column gap-3"></div>
     </section>
   </div>
 </main>
@@ -898,10 +943,15 @@ document.querySelectorAll('.sidebar .nav-link').forEach(a=>{
   a.addEventListener('click',e=>{e.preventDefault();showSection(a.dataset.section);});
 });
 function showSection(name){
+  // Control de acceso: si no eres admin y no tienes esta pestaña habilitada, no se muestra.
+  if(window.mySections && !mySections.includes(name) && name!=='dashboard' && (!window.myProfile||myProfile.role!=='admin')){
+    showToast('No tienes acceso a esta sección','danger');
+    name='dashboard';
+  }
   document.querySelectorAll('.app-section').forEach(s=>s.classList.add('d-none'));
   document.getElementById(name).classList.remove('d-none');
   document.querySelectorAll('.sidebar .nav-link').forEach(a=>a.classList.toggle('active',a.dataset.section===name));
-  document.getElementById('pageTitle').textContent={dashboard:'Inicio',correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores'}[name];
+  document.getElementById('pageTitle').textContent={dashboard:'Inicio',correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores',usuarios:'Usuarios'}[name];
   if(name==='correo') renderTemplates();
   if(name==='tareas') renderTasks();
   if(name==='notas') renderNotes();
@@ -911,6 +961,7 @@ function showSection(name){
   if(name==='responsables') renderResponsibles();
   if(name==='cadenas') renderChains();
   if(name==='instaladores') renderInstallers();
+  if(name==='usuarios') renderUsersPanel();
   updateStats();
 }
 
@@ -1825,11 +1876,15 @@ function iconFor(type){
 function formatBytes(n){if(n<1024)return n+' B';if(n<1048576)return (n/1024).toFixed(1)+' KB';return (n/1048576).toFixed(1)+' MB'}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 
-initDB().then(()=>{updateStats();renderTemplates();renderTasks();renderNotes();renderCredentials();renderExtensions();renderProcedures();renderResponsibles();renderChains();globalSearch('');closeGlobalSearch();if(!state.drafts.length)newDraft();else loadDraft(state.drafts[0].id);
-  // Precarga el banco de instaladores en memoria (sin pintar la sección) para que el
-  // buscador global pueda encontrarlos aunque nunca hayas entrado a "Instaladores".
-  dbGetAllInstallers().then(list=>{_installersCache=list||[];}).catch(()=>{});
-}).catch(err=>{console.error('IndexedDB:',err);showToast('No se pudo inicializar el almacenamiento de archivos','danger');});
+// Este arranque de la app local (IndexedDB + render inicial) ya no se ejecuta solo: ahora lo
+// llama el flujo de login de Supabase (ver más abajo) una vez confirma sesión y permisos.
+function startLocalApp(){
+  initDB().then(()=>{updateStats();renderTemplates();renderTasks();renderNotes();renderCredentials();renderExtensions();renderProcedures();renderResponsibles();renderChains();globalSearch('');closeGlobalSearch();if(!state.drafts.length)newDraft();else loadDraft(state.drafts[0].id);
+    // Precarga el banco de instaladores en memoria (sin pintar la sección) para que el
+    // buscador global pueda encontrarlos aunque nunca hayas entrado a "Instaladores".
+    dbGetAllInstallers().then(list=>{_installersCache=list||[];}).catch(()=>{});
+  }).catch(err=>{console.error('IndexedDB:',err);showToast('No se pudo inicializar el almacenamiento de archivos','danger');});
+}
 
 (function(){
   const input=document.getElementById('globalSearch');
@@ -2264,6 +2319,145 @@ initDB().then(()=>{updateStats();renderTemplates();renderTasks();renderNotes();r
   window.addEventListener('DOMContentLoaded',function(){ensureDeleteModal();setTimeout(function(){if(window.renderTemplates)renderTemplates();if(window.renderTasks)renderTasks();},0);});
 })();
 
+</script>
+
+<!-- ===================== SUPABASE: LOGIN, PERMISOS Y PANEL DE USUARIOS ===================== -->
+<script>
+(function(){
+  const SUPABASE_URL='https://dvejzylyjqjleygbdckn.supabase.co';
+  const SUPABASE_ANON_KEY='sb_publishable_aWC0REuYAKEf5hAfgBIRYA_zERurgjk';
+  const sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  window.sb=sb; // queda disponible para cuando migremos los datos de cada sección más adelante
+
+  const ALL_SECTIONS=['correo','tareas','notas','credenciales','extensiones','procedimientos','responsables','cadenas','instaladores'];
+  const SECTION_LABELS={correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores'};
+
+  function showAuthError(msg){
+    const el=document.getElementById('authError');
+    el.textContent=msg; el.classList.remove('d-none');
+  }
+  function hideAuthError(){ document.getElementById('authError').classList.add('d-none'); }
+
+  window.doLogin=async function(){
+    hideAuthError();
+    const email=document.getElementById('authEmail').value.trim();
+    const password=document.getElementById('authPassword').value;
+    const btn=document.getElementById('authSubmitBtn');
+    btn.disabled=true; btn.textContent='Entrando...';
+    const {error}=await sb.auth.signInWithPassword({email,password});
+    btn.disabled=false; btn.textContent='Iniciar sesión';
+    if(error){ showAuthError('Correo o contraseña incorrectos.'); return; }
+    await afterLogin();
+  };
+  window.doLogout=async function(){
+    await sb.auth.signOut();
+    location.reload();
+  };
+
+  // Trae (o crea, si es la primera vez que esta persona entra) su perfil de permisos.
+  async function loadOrCreateMyProfile(user){
+    let {data:profile}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+    if(!profile){
+      const {data:created,error}=await sb.from('profiles').insert({
+        id:user.id, email:user.email, full_name:user.email, role:'user', sections:[]
+      }).select().single();
+      if(error){ console.error(error); return null; }
+      profile=created;
+    }
+    return profile;
+  }
+
+  async function afterLogin(){
+    const {data:{user}}=await sb.auth.getUser();
+    if(!user){ document.body.classList.remove('authed'); return; }
+    const profile=await loadOrCreateMyProfile(user);
+    if(!profile){ showAuthError('No se pudo cargar tu perfil de permisos.'); return; }
+    window.myProfile=profile;
+    window.mySections=profile.sections||[];
+
+    // Si todavía no tiene ninguna pestaña habilitada (ni es admin), lo dejamos en la
+    // pantalla de espera en vez de mostrarle una app vacía y confusa.
+    if(profile.role!=='admin' && window.mySections.length===0){
+      document.getElementById('authForm').classList.add('d-none');
+      document.getElementById('authPendingMsg').classList.remove('d-none');
+      document.getElementById('authLogoutFromPending').classList.remove('d-none');
+      document.body.classList.remove('authed');
+      return;
+    }
+
+    document.body.classList.add('authed');
+    const badge=document.getElementById('authUserBadge');
+    if(badge){ badge.textContent=(profile.full_name||profile.email)+(profile.role==='admin'?' (admin)':''); badge.classList.remove('d-none'); }
+
+    // Oculta del menú las pestañas que esta persona no tiene habilitadas (los admins ven todo).
+    document.querySelectorAll('.sidebar .nav-link[data-section]').forEach(a=>{
+      const s=a.dataset.section;
+      if(s==='dashboard')return;
+      if(s==='usuarios'){ a.classList.toggle('d-none', profile.role!=='admin'); return; }
+      a.classList.toggle('d-none', profile.role!=='admin' && !window.mySections.includes(s));
+    });
+
+    if(typeof startLocalApp==='function') startLocalApp();
+  }
+
+  // --- Panel de administrador: ver, habilitar/quitar pestañas, cambiar rol, quitar acceso ---
+  window.renderUsersPanel=async function(){
+    const host=document.getElementById('usersList'); if(!host)return;
+    if(!window.myProfile||myProfile.role!=='admin'){ host.innerHTML='<div class="text-secondary">Solo un administrador puede ver esta sección.</div>'; return; }
+    host.innerHTML='<div class="text-secondary">Cargando usuarios...</div>';
+    const {data:users,error}=await sb.from('profiles').select('*').order('created_at');
+    if(error){ host.innerHTML='<div class="text-danger">No se pudo cargar la lista de usuarios.</div>'; console.error(error); return; }
+    host.innerHTML=users.map(u=>{
+      const sections=u.sections||[];
+      const checks=ALL_SECTIONS.map(s=>`
+        <div class="form-check form-check-inline">
+          <input class="form-check-input" type="checkbox" id="sec_${u.id}_${s}" ${sections.includes(s)?'checked':''} ${u.role==='admin'?'disabled':''} onchange="toggleUserSection('${u.id}','${s}',this.checked)">
+          <label class="form-check-label small" for="sec_${u.id}_${s}">${SECTION_LABELS[s]}</label>
+        </div>`).join('');
+      return `<div class="card p-3 border">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+          <div>
+            <strong>${(u.full_name||u.email||'').replace(/</g,'&lt;')}</strong>
+            <div class="small-muted">${(u.email||'').replace(/</g,'&lt;')}</div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <select class="form-select form-select-sm" style="width:auto" onchange="setUserRole('${u.id}',this.value)" ${u.id===myProfile.id?'disabled title="No puedes cambiar tu propio rol"':''}>
+              <option value="user" ${u.role==='user'?'selected':''}>Usuario</option>
+              <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
+            </select>
+            <button type="button" class="btn btn-sm btn-outline-danger" ${u.id===myProfile.id?'disabled title="No puedes eliminarte a ti mismo"':''} onclick="removeUserProfile('${u.id}','${(u.email||'').replace(/'/g,"")}')"><i class="bi bi-trash"></i></button>
+          </div>
+        </div>
+        ${u.role==='admin'?'<div class="small-muted">Los administradores tienen acceso a todas las pestañas automáticamente.</div>':`<div class="d-flex flex-wrap gap-2">${checks}</div>`}
+      </div>`;
+    }).join('')||'<div class="text-secondary">No hay usuarios todavía.</div>';
+  };
+  window.toggleUserSection=async function(userId,section,checked){
+    const {data:u}=await sb.from('profiles').select('sections').eq('id',userId).single();
+    let sections=(u&&u.sections)||[];
+    sections=checked?[...new Set([...sections,section])]:sections.filter(s=>s!==section);
+    const {error}=await sb.from('profiles').update({sections}).eq('id',userId);
+    if(error){ showToast('No se pudo guardar el cambio','danger'); console.error(error); return; }
+    showToast('Permisos actualizados');
+  };
+  window.setUserRole=async function(userId,role){
+    const {error}=await sb.from('profiles').update({role, sections: role==='admin'?[]:undefined}).eq('id',userId);
+    if(error){ showToast('No se pudo cambiar el rol','danger'); console.error(error); return; }
+    showToast('Rol actualizado'); renderUsersPanel();
+  };
+  window.removeUserProfile=function(userId,email){
+    askDelete('Quitar acceso','¿Quitarle el acceso a "'+email+'"? Su usuario seguirá existiendo en Supabase, pero no podrá entrar a la app hasta que lo vuelvas a habilitar.',async function(){
+      const {error}=await sb.from('profiles').delete().eq('id',userId);
+      if(error){ showToast('No se pudo quitar el acceso','danger'); console.error(error); return; }
+      showToast('Acceso retirado'); renderUsersPanel();
+    });
+  };
+
+  // Al cargar la página: si ya había una sesión abierta en este navegador, entra directo.
+  sb.auth.getSession().then(({data:{session}})=>{
+    if(session) afterLogin(); else document.body.classList.remove('authed');
+  });
+})();
 </script>
 </body>
 </html>
