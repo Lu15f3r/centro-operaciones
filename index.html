@@ -218,8 +218,8 @@
         </div>
         <div class="col-lg-5">
           <div class="card p-4">
-            <h5>Importante</h5>
-            <p class="small-muted mb-0">Esta versión guarda los datos en el navegador mediante almacenamiento local. Para contraseñas, tokens y accesos críticos, conviene usar un gestor de secretos o una aplicación con autenticación, no un HTML estático.</p>
+            <h5><i class="bi bi-cloud-check text-success"></i> Conectado a la nube</h5>
+            <p class="small-muted mb-0">Correo/Plantillas, Extensiones, Procedimientos, Responsables y Cadenas se comparten con todo el equipo. Tus Notas, Tareas y Claves son privadas: solo tú las ves.</p>
           </div>
         </div>
       </div>
@@ -356,9 +356,9 @@
         </div>
       </div>
 
-      <div class="alert alert-warning">
+      <div class="alert alert-info">
         <i class="bi bi-shield-lock"></i>
-        <strong>Importante:</strong> esta versión guarda las claves en el navegador mediante <code>localStorage</code>. Es práctica para un equipo personal, pero no equivale a un gestor de contraseñas profesional.
+        Estas claves son <strong>privadas</strong>: se guardan en la base de datos y solo tú puedes verlas, aunque entres desde otro computador.
       </div>
 
       <div id="credentialsGrid" class="row g-3"></div>
@@ -796,7 +796,7 @@ function persist(){
   localStorage.setItem('co_template_categories', JSON.stringify(state.templateCategories||[]));
   updateStats();
 }
-function id(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function id(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 
 // Algunos navegadores/dispositivos (común en móviles, WhatsApp, Drive) no informan el tipo MIME
 // real del archivo. Si eso pasa con un PDF o imagen, el archivo SÍ se guarda pero el visor
@@ -2397,6 +2397,7 @@ function startLocalApp(){
       a.classList.toggle('d-none', profile.role!=='admin' && !window.mySections.includes(s));
     });
 
+    if(typeof pullCloudDataIntoLocal==='function') await pullCloudDataIntoLocal();
     if(typeof startLocalApp==='function') startLocalApp();
   }
 
@@ -2457,6 +2458,188 @@ function startLocalApp(){
   sb.auth.getSession().then(({data:{session}})=>{
     if(session) afterLogin(); else document.body.classList.remove('authed');
   });
+})();
+</script>
+
+<!-- ===================== SUPABASE: SINCRONIZACIÓN DE DATOS (plantillas, tareas, notas, claves, extensiones, procedimientos, responsables, cadenas) ===================== -->
+<script>
+(function(){
+  // Correo/Plantillas, Extensiones, Procedimientos, Responsables y Cadenas son COMPARTIDOS
+  // (todo el equipo ve y edita lo mismo). Notas, Tareas y Claves son PRIVADOS (solo su dueño).
+  //
+  // LÍMITE CONOCIDO DE ESTA FASE: los archivos (PDF de Procedimientos/Cadenas, adjuntos de
+  // Plantillas) todavía viven solo en el navegador de quien los subió — lo que se sincroniza
+  // aquí es el TEXTO de cada cosa (nombre, contenido, etc.). Sincronizar los archivos en sí
+  // es la siguiente fase.
+
+  async function cloudSyncShared(table, localArr, toRow){
+    if(!window.sb||!localArr)return;
+    try{
+      if(localArr.length){
+        const {error}=await sb.from(table).upsert(localArr.map(toRow));
+        if(error){console.error('sync '+table,error);return;}
+      }
+      const {data:existing}=await sb.from(table).select('id');
+      const localIds=new Set(localArr.map(x=>String(x.id)));
+      const toDelete=(existing||[]).filter(r=>!localIds.has(String(r.id))).map(r=>r.id);
+      if(toDelete.length) await sb.from(table).delete().in('id',toDelete);
+    }catch(err){console.error('sync '+table,err);}
+  }
+  async function cloudSyncPrivate(table, localArr, toRow){
+    if(!window.sb||!window.myProfile||!localArr)return;
+    const uid=myProfile.id;
+    try{
+      if(localArr.length){
+        const {error}=await sb.from(table).upsert(localArr.map(x=>({...toRow(x),user_id:uid})));
+        if(error){console.error('sync '+table,error);return;}
+      }
+      const {data:existing}=await sb.from(table).select('id').eq('user_id',uid);
+      const localIds=new Set(localArr.map(x=>String(x.id)));
+      const toDelete=(existing||[]).filter(r=>!localIds.has(String(r.id))).map(r=>r.id);
+      if(toDelete.length) await sb.from(table).delete().in('id',toDelete);
+    }catch(err){console.error('sync '+table,err);}
+  }
+
+  // --- Mapeos: forma local (la que ya usa toda la app) <-> columnas de la tabla en Supabase ---
+  const MAP={
+    template_categories:{
+      toRow:c=>({id:c.id,name:c.name,color:c.color}),
+      toLocal:r=>({id:r.id,name:r.name,color:r.color})
+    },
+    templates:{
+      toRow:t=>({id:t.id,title:t.title||'',subject:t.subject||'',to_field:t.to||'',cc:t.cc||'',body:t.body||'',category_id:t.category||null,attachments:[]}),
+      toLocal:r=>({id:r.id,title:r.title||'',subject:r.subject||'',to:r.to_field||'',cc:r.cc||'',body:r.body||'',category:r.category_id||'',attachments:[]})
+    },
+    extensions:{
+      toRow:x=>({id:x.id,name:x.name||'',number:x.number||'',category:x.category||'',note:x.note||''}),
+      toLocal:r=>({id:r.id,name:r.name||'',number:r.number||'',category:r.category||'',note:r.note||''})
+    },
+    responsibles:{
+      toRow:x=>({id:x.id,code:x.code||'',name:x.name||'',team:x.team||''}),
+      toLocal:r=>({id:r.id,code:r.code||'',name:r.name||'',team:r.team||''})
+    },
+    procedures:{
+      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null}),
+      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.fileId||null})
+    },
+    chains:{
+      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null}),
+      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.fileId||null})
+    },
+    notes:{
+      toRow:n=>({id:n.id,title:n.title||'',content_html:n.text||'',important:!!n.important}),
+      toLocal:r=>({id:r.id,title:r.title||'',text:r.content_html||'',important:!!r.important,updated:r.updated_at})
+    },
+    tasks:{
+      toRow:t=>({id:t.id,title:t.title||'',description:t.desc||'',status:t.status||'pendiente',due_at:t.dueAt||null,
+        daily_times:{times:t.dailyTimes||[],ack:t.dailyAck||{},lastNotified:t.dailyLastNotified||{}},
+        last_notified_at:t.lastNotifiedAt?new Date(t.lastNotifiedAt).toISOString():null}),
+      toLocal:r=>({id:r.id,title:r.title||'',desc:r.description||'',status:r.status||'pendiente',dueAt:r.due_at||null,
+        dailyTimes:(r.daily_times&&r.daily_times.times)||[],dailyAck:(r.daily_times&&r.daily_times.ack)||{},dailyLastNotified:(r.daily_times&&r.daily_times.lastNotified)||{},
+        lastNotifiedAt:r.last_notified_at?new Date(r.last_notified_at).getTime():0,created:Date.now(),updated:Date.now()})
+    },
+    credentials:{
+      toRow:c=>({id:c.id,name:c.name||'',username:c.user||'',password:c.password||'',note:c.note||''}),
+      toLocal:r=>({id:r.id,name:r.name||'',user:r.username||'',password:r.password||'',note:r.note||'',created:Date.now(),updated:Date.now()})
+    }
+  };
+
+  // Engancha la subida a la nube en los mismos puntos donde la app YA guarda localmente,
+  // así no hay que tocar cada botón de crear/editar/borrar uno por uno.
+  const _origPersist=window.persist, _origPersistOperations=window.persistOperations, _origPersistCredentials=window.persistCredentials;
+  window.persist=function(){
+    _origPersist();
+    cloudSyncShared('template_categories', state.templateCategories||[], MAP.template_categories.toRow);
+    cloudSyncShared('templates', state.templates||[], MAP.templates.toRow);
+    cloudSyncPrivate('notes', state.notes||[], MAP.notes.toRow);
+    cloudSyncPrivate('tasks', state.tasks||[], MAP.tasks.toRow);
+  };
+  window.persistOperations=function(){
+    _origPersistOperations();
+    cloudSyncShared('extensions', extensions||[], MAP.extensions.toRow);
+    cloudSyncShared('responsibles', responsibles||[], MAP.responsibles.toRow);
+    cloudSyncShared('procedures', procedures||[], MAP.procedures.toRow);
+    cloudSyncShared('chains', chains||[], MAP.chains.toRow);
+  };
+  window.persistCredentials=function(){
+    _origPersistCredentials();
+    cloudSyncPrivate('credentials', credentials||[], MAP.credentials.toRow);
+  };
+
+  // --- Bajar de la nube al iniciar sesión ---
+  // Si la nube YA tiene datos para una tabla, esos mandan (así todos ven lo mismo).
+  // Si la nube está vacía pero hay datos locales en este navegador, NO se borran solos —
+  // se avisa para que el usuario los suba con el botón "Migrar mis datos locales a la nube".
+  window._pendingLocalMigration=[];
+  const UUID_RE=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  function newUuid(){ return (window.crypto&&crypto.randomUUID)?crypto.randomUUID():id(); }
+  function regenerateInvalidIds(arr){
+    if(!Array.isArray(arr))return;
+    arr.forEach(x=>{ if(!UUID_RE.test(String(x.id||''))) x.id=newUuid(); });
+  }
+  // Los datos que ya tenías guardados en el navegador usaban un formato de identificador
+  // distinto al que necesita Postgres (uuid). Antes de subir nada a la nube, se corrigen
+  // en el mismo navegador (y si una categoría de plantilla cambia de id, se actualizan las
+  // plantillas que la usaban para que no queden apuntando a la categoría equivocada).
+  function fixAllLegacyIds(){
+    const remap={};
+    (state.templateCategories||[]).forEach(c=>{ if(!UUID_RE.test(String(c.id))){ const n=newUuid(); remap[c.id]=n; c.id=n; } });
+    if(Object.keys(remap).length) (state.templates||[]).forEach(t=>{ if(t.category&&remap[t.category]) t.category=remap[t.category]; });
+    regenerateInvalidIds(state.templates);
+    regenerateInvalidIds(state.notes);
+    regenerateInvalidIds(state.tasks);
+    regenerateInvalidIds(extensions);
+    regenerateInvalidIds(responsibles);
+    regenerateInvalidIds(procedures);
+    regenerateInvalidIds(chains);
+    regenerateInvalidIds(credentials);
+  }
+  async function pullShared(table, getLocal, setLocal){
+    const {data,error}=await sb.from(table).select('*');
+    if(error){console.error('pull '+table,error);return;}
+    const local=getLocal()||[];
+    if(data&&data.length) setLocal(data.map(MAP[table].toLocal));
+    else if(local.length) window._pendingLocalMigration.push(table);
+  }
+  async function pullPrivate(table, getLocal, setLocal){
+    const {data,error}=await sb.from(table).select('*').eq('user_id',myProfile.id);
+    if(error){console.error('pull '+table,error);return;}
+    const local=getLocal()||[];
+    if(data&&data.length) setLocal(data.map(MAP[table].toLocal));
+    else if(local.length) window._pendingLocalMigration.push(table);
+  }
+  window.pullCloudDataIntoLocal=async function(){
+    if(!window.sb||!window.myProfile)return;
+    window._pendingLocalMigration=[];
+    fixAllLegacyIds();
+    await pullShared('template_categories', ()=>state.templateCategories, v=>{state.templateCategories=v;});
+    await pullShared('templates', ()=>state.templates, v=>{state.templates=v;});
+    await pullShared('extensions', ()=>extensions, v=>{extensions=v;});
+    await pullShared('responsibles', ()=>responsibles, v=>{responsibles=v;});
+    await pullShared('procedures', ()=>procedures, v=>{procedures=v;});
+    await pullShared('chains', ()=>chains, v=>{chains=v;});
+    await pullPrivate('notes', ()=>state.notes, v=>{state.notes=v;});
+    await pullPrivate('tasks', ()=>state.tasks, v=>{state.tasks=v;});
+    await pullPrivate('credentials', ()=>credentials, v=>{credentials=v;});
+    if(window._pendingLocalMigration.length) showMigrationBanner();
+  };
+
+  function showMigrationBanner(){
+    if(document.getElementById('cloudMigrationBanner'))return;
+    const div=document.createElement('div');
+    div.id='cloudMigrationBanner';
+    div.className='alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2 m-3';
+    div.innerHTML='<div><i class="bi bi-cloud-upload"></i> Tienes datos guardados en este navegador que todavía no están en la nube.</div><button class="btn btn-sm btn-primary" onclick="migrateLocalDataToCloud()">Migrar mis datos locales a la nube</button>';
+    document.querySelector('.container-fluid')?.prepend(div);
+  }
+  window.migrateLocalDataToCloud=async function(){
+    showToast('Subiendo tus datos a la nube...');
+    if(typeof persist==='function') persist();
+    if(typeof persistOperations==='function') persistOperations();
+    if(typeof persistCredentials==='function') persistCredentials();
+    document.getElementById('cloudMigrationBanner')?.remove();
+    showToast('Listo — tus datos ya están en la nube');
+  };
 })();
 </script>
 </body>
