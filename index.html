@@ -1839,6 +1839,11 @@ document.getElementById('importFileInput').addEventListener('change', async e=>{
   if(!file) return;
   if(!confirm('Esto reemplazará TODOS los datos guardados en este navegador (plantillas, borradores, tareas, notas, claves, procedimientos, responsables, cadenas y adjuntos) por los del archivo de respaldo. Esta acción no se puede deshacer. ¿Deseas continuar?')) return;
   try{
+    // Antes, si la base de archivos (IndexedDB, donde viven los PDF) todavía no estaba lista
+    // en ese instante, esta parte se saltaba EN SILENCIO — el resto se importaba bien, pero
+    // los PDF de Procedimientos/Cadenas y los adjuntos de correo quedaban sin restaurar, sin
+    // ningún aviso. Ahora se espera a que esté lista antes de continuar.
+    if(!db){ showToast('Preparando almacenamiento de archivos...'); await initDB(); }
     const text=await file.text();
     const data=JSON.parse(text);
     if(!data||typeof data!=='object') throw new Error('Formato inválido');
@@ -1859,12 +1864,14 @@ document.getElementById('importFileInput').addEventListener('change', async e=>{
         data.attachments.forEach(item=>store.put(item));
         tx.oncomplete=resolve; tx.onerror=()=>reject(tx.error||new Error('Fallo al restaurar adjuntos'));
       });
+    }else if(Array.isArray(data.attachments)&&data.attachments.length){
+      showToast('Atención: no se pudieron restaurar los '+data.attachments.length+' archivo(s) adjuntos/PDF (base de archivos no disponible)','danger');
     }
-    showToast('Respaldo importado. Recargando...');
-    setTimeout(()=>location.reload(), 900);
+    showToast('Respaldo importado ('+(data.attachments||[]).length+' archivo(s) incluidos). Recargando...');
+    setTimeout(()=>location.reload(), 1200);
   }catch(err){
     console.error('importBackup:',err);
-    showToast('El archivo de respaldo no es válido o está dañado','danger');
+    showToast('El archivo de respaldo no es válido o está dañado: '+(err.message||''),'danger');
   }
 });
 function iconFor(type){
@@ -2477,13 +2484,13 @@ function startLocalApp(){
     try{
       if(localArr.length){
         const {error}=await sb.from(table).upsert(localArr.map(toRow));
-        if(error){console.error('sync '+table,error);return;}
+        if(error){console.error('sync '+table,error);showToast('No se pudo sincronizar '+table+' con la nube: '+(error.message||'error desconocido'),'danger');return;}
       }
       const {data:existing}=await sb.from(table).select('id');
       const localIds=new Set(localArr.map(x=>String(x.id)));
       const toDelete=(existing||[]).filter(r=>!localIds.has(String(r.id))).map(r=>r.id);
       if(toDelete.length) await sb.from(table).delete().in('id',toDelete);
-    }catch(err){console.error('sync '+table,err);}
+    }catch(err){console.error('sync '+table,err);showToast('Error de red sincronizando '+table,'danger');}
   }
   async function cloudSyncPrivate(table, localArr, toRow){
     if(!window.sb||!window.myProfile||!localArr)return;
@@ -2491,13 +2498,13 @@ function startLocalApp(){
     try{
       if(localArr.length){
         const {error}=await sb.from(table).upsert(localArr.map(x=>({...toRow(x),user_id:uid})));
-        if(error){console.error('sync '+table,error);return;}
+        if(error){console.error('sync '+table,error);showToast('No se pudo sincronizar '+table+' con la nube: '+(error.message||'error desconocido'),'danger');return;}
       }
       const {data:existing}=await sb.from(table).select('id').eq('user_id',uid);
       const localIds=new Set(localArr.map(x=>String(x.id)));
       const toDelete=(existing||[]).filter(r=>!localIds.has(String(r.id))).map(r=>r.id);
       if(toDelete.length) await sb.from(table).delete().in('id',toDelete);
-    }catch(err){console.error('sync '+table,err);}
+    }catch(err){console.error('sync '+table,err);showToast('Error de red sincronizando '+table,'danger');}
   }
 
   // --- Mapeos: forma local (la que ya usa toda la app) <-> columnas de la tabla en Supabase ---
@@ -2549,8 +2556,12 @@ function startLocalApp(){
   const _origPersist=window.persist, _origPersistOperations=window.persistOperations, _origPersistCredentials=window.persistCredentials;
   window.persist=function(){
     _origPersist();
-    cloudSyncShared('template_categories', state.templateCategories||[], MAP.template_categories.toRow);
-    cloudSyncShared('templates', state.templates||[], MAP.templates.toRow);
+    // Primero las categorías y DESPUÉS las plantillas (en ese orden, esperando a que termine
+    // cada paso) — antes se mandaban las dos al mismo tiempo, y si la categoría llegaba a la
+    // base de datos un instante después que la plantilla, Postgres rechazaba la plantilla
+    // completa por referenciar una categoría que "todavía no existía" (error de llave foránea).
+    cloudSyncShared('template_categories', state.templateCategories||[], MAP.template_categories.toRow)
+      .then(()=>cloudSyncShared('templates', state.templates||[], MAP.templates.toRow));
     cloudSyncPrivate('notes', state.notes||[], MAP.notes.toRow);
     cloudSyncPrivate('tasks', state.tasks||[], MAP.tasks.toRow);
   };
@@ -2596,14 +2607,14 @@ function startLocalApp(){
   }
   async function pullShared(table, getLocal, setLocal){
     const {data,error}=await sb.from(table).select('*');
-    if(error){console.error('pull '+table,error);return;}
+    if(error){console.error('pull '+table,error);showToast('No se pudo leer '+table+' de la nube: '+(error.message||''),'danger');return;}
     const local=getLocal()||[];
     if(data&&data.length) setLocal(data.map(MAP[table].toLocal));
     else if(local.length) window._pendingLocalMigration.push(table);
   }
   async function pullPrivate(table, getLocal, setLocal){
     const {data,error}=await sb.from(table).select('*').eq('user_id',myProfile.id);
-    if(error){console.error('pull '+table,error);return;}
+    if(error){console.error('pull '+table,error);showToast('No se pudo leer '+table+' de la nube: '+(error.message||''),'danger');return;}
     const local=getLocal()||[];
     if(data&&data.length) setLocal(data.map(MAP[table].toLocal));
     else if(local.length) window._pendingLocalMigration.push(table);
