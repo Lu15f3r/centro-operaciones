@@ -2526,12 +2526,12 @@ function startLocalApp(){
       toLocal:r=>({id:r.id,code:r.code||'',name:r.name||'',team:r.team||''})
     },
     procedures:{
-      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null}),
-      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.fileId||null})
+      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null,file_id:x.fileId||null}),
+      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.file_id||null})
     },
     chains:{
-      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null}),
-      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.fileId||null})
+      toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null,file_id:x.fileId||null}),
+      toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.file_id||null})
     },
     notes:{
       toRow:n=>({id:n.id,title:n.title||'',content_html:n.text||'',important:!!n.important}),
