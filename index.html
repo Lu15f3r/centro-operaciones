@@ -439,7 +439,7 @@
         <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div>
             <h5 class="mb-1"><i class="bi bi-hdd-stack text-primary"></i> Banco de instaladores</h5>
-            <div class="small-muted">Sube carpetas completas de instaladores, o archivos/ZIP sueltos. Se guardan en este navegador, organizados por paquete.</div>
+            <div class="small-muted">Sube carpetas completas de instaladores, o archivos/ZIP sueltos. Se guardan en la nube, organizados por paquete, y los ve todo el equipo.</div>
           </div>
           <div class="d-flex gap-2 flex-wrap">
             <label class="btn btn-primary mb-0">
@@ -457,7 +457,7 @@
         <i class="bi bi-info-circle mt-1"></i>
         <div>
           <strong>Cómo se organiza:</strong> si subes una <strong>carpeta</strong>, se guarda como un paquete con el mismo nombre de esa carpeta. Si subes archivos sueltos o un <strong>.zip</strong>, te pedimos un nombre de paquete antes de guardarlos (el .zip se guarda completo, sin descomprimir).
-          <div class="mt-1 small-muted">Nota: por su tamaño, los instaladores no se incluyen en el respaldo (Exportar/Importar); quedan guardados aparte, solo en este navegador.</div>
+          <div class="mt-1 small-muted">Nota: los instaladores se guardan en la nube (Supabase Storage) y se comparten con todo el equipo; no van en el respaldo Exportar/Importar por su tamaño. Cada archivo tiene un límite (revisa el de tu bucket "instaladores" en Supabase si algo pesado no sube).</div>
         </div>
       </div>
       <div class="row g-3 mb-3 align-items-center">
@@ -1495,34 +1495,62 @@ function renderStagedInstallers(){
 }
 function removeStagedInstaller(i){stagedInstallers.splice(i,1);renderStagedInstallers();}
 function cancelStagedInstallers(){stagedInstallers=[];}
+function sanitizeStorageName(s){ return String(s||'').replace(/[^a-zA-Z0-9 ._-]/g,'_'); }
+function storagePathFromPublicUrl(url,bucket){
+  const marker='/object/public/'+bucket+'/';
+  const idx=(url||'').indexOf(marker);
+  return idx===-1?null:decodeURIComponent(url.slice(idx+marker.length));
+}
+async function uploadInstallerToCloud(file,pkg){
+  if(!window.sb) throw new Error('No hay conexión con la nube (recarga la página e inicia sesión de nuevo)');
+  const newId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():id();
+  const path=sanitizeStorageName(pkg)+'/'+newId+'-'+sanitizeStorageName(file.name);
+  const {error:upErr}=await sb.storage.from('instaladores').upload(path,file,{upsert:true,contentType:file.type||'application/octet-stream'});
+  if(upErr){
+    // Supabase limita el tamaño de archivo por bucket (50 MB por defecto). Este es el error
+    // más común al subir instaladores pesados — se traduce a un mensaje claro.
+    if(/exceeded the maximum allowed size|Payload too large/i.test(upErr.message||'')){
+      throw new Error('El archivo supera el límite de tamaño permitido en el bucket "instaladores" (revisa Supabase → Storage → instaladores → Settings → File size limit)');
+    }
+    throw upErr;
+  }
+  const {data:pub}=sb.storage.from('instaladores').getPublicUrl(path);
+  const {error:dbErr}=await sb.from('installers').insert({id:newId,package:pkg,name:file.name,file_path:pub.publicUrl,size:file.size});
+  if(dbErr){ await sb.storage.from('instaladores').remove([path]); throw dbErr; }
+}
 async function confirmStagedInstallers(){
   const pkg=(document.getElementById('installerPackageName').value||'').trim();
   if(!pkg){showToast('Escribe un nombre de paquete','info');return;}
   if(!stagedInstallers.length){bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).hide();return;}
+  const confirmBtn=document.getElementById('installerStageConfirmBtn');
+  confirmBtn.disabled=true; confirmBtn.textContent='Subiendo a la nube...';
   let okCount=0;
   for(const s of stagedInstallers){
-    try{ await dbPutInstaller(s.file, pkg); okCount++; }
+    try{ await uploadInstallerToCloud(s.file,pkg); okCount++; }
     catch(err){
-      console.error('dbPutInstaller error:',err);
-      const isQuota=err && (err.name==='QuotaExceededError' || /quota/i.test(err.message||''));
-      showToast(isQuota?'Sin espacio de almacenamiento para '+s.file.name+' (borra instaladores viejos)':'No se pudo guardar '+s.file.name,'danger');
+      console.error('uploadInstallerToCloud error:',err);
+      showToast('No se pudo subir '+s.file.name+' a la nube: '+(err.message||'error desconocido'),'danger');
     }
   }
+  confirmBtn.disabled=false;
   stagedInstallers=[];
   bootstrap.Modal.getOrCreateInstance(document.getElementById('installerStageModal')).hide();
-  if(okCount>0) showToast(okCount+' archivo(s) guardado(s) en "'+pkg+'"');
+  if(okCount>0) showToast(okCount+' archivo(s) subido(s) a la nube, paquete "'+pkg+'"');
   renderInstallers();
 }
 async function renderInstallers(){
   const grid=document.getElementById('installersGrid');
   if(!grid)return;
-  try{ _installersCache=await dbGetAllInstallers(); }
-  catch(err){ console.error(err); grid.innerHTML='<div class="col-12"><div class="dropzone">No se pudo leer el banco de instaladores.</div></div>'; return; }
+  grid.innerHTML='<div class="col-12"><div class="dropzone">Cargando...</div></div>';
+  if(!window.sb){grid.innerHTML='<div class="col-12"><div class="dropzone">Sin conexión con la nube.</div></div>';return;}
+  const {data,error}=await sb.from('installers').select('*').order('created_at');
+  if(error){console.error(error);grid.innerHTML='<div class="col-12"><div class="dropzone">No se pudo leer el banco de instaladores.</div></div>';showToast('No se pudo leer instaladores: '+(error.message||''),'danger');return;}
+  _installersCache=(data||[]).map(r=>({id:r.id,package:r.package,name:r.name,size:r.size,file_path:r.file_path}));
   const q=(document.getElementById('installerSearch')?.value||'').toLowerCase();
   const totalEl=document.getElementById('installerTotalSize');
   if(totalEl){
     const totalBytes=_installersCache.reduce((a,x)=>a+(x.size||0),0);
-    totalEl.textContent=_installersCache.length?(_installersCache.length+' archivo(s) · '+formatBytes(totalBytes)+' en total'):'';
+    totalEl.textContent=_installersCache.length?(_installersCache.length+' archivo(s) · '+formatBytes(totalBytes)+' en total · compartido con todo el equipo'):'';
   }
   const byPkg={};
   _installersCache.forEach(x=>{
@@ -1554,22 +1582,36 @@ async function renderInstallers(){
 }
 function downloadInstaller(fileId){
   const item=_installersCache.find(x=>String(x.id)===String(fileId));
-  if(!item||!item.blob){showToast('El archivo no está disponible','danger');return;}
-  const url=URL.createObjectURL(item.blob);
-  const a=document.createElement('a'); a.href=url; a.download=item.name; document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),4000);
+  if(!item||!item.file_path){showToast('El archivo no está disponible','danger');return;}
+  const a=document.createElement('a');
+  a.href=item.file_path+(item.file_path.includes('?')?'&':'?')+'download='+encodeURIComponent(item.name);
+  a.download=item.name; a.target='_blank';
+  document.body.appendChild(a); a.click(); a.remove();
 }
 async function deleteInstaller(fileId){
-  try{ await dbDeleteInstaller(fileId); showToast('Archivo eliminado'); renderInstallers(); }
-  catch(err){ console.error(err); showToast('No se pudo eliminar el archivo','danger'); }
+  const item=_installersCache.find(x=>String(x.id)===String(fileId));
+  if(!item)return;
+  try{
+    const path=storagePathFromPublicUrl(item.file_path,'instaladores');
+    if(path) await sb.storage.from('instaladores').remove([path]);
+    const {error}=await sb.from('installers').delete().eq('id',fileId);
+    if(error)throw error;
+    showToast('Archivo eliminado'); renderInstallers();
+  }catch(err){ console.error(err); showToast('No se pudo eliminar el archivo: '+(err.message||''),'danger'); }
 }
 function deleteInstallerPackage(pkg){
-  askDelete('Eliminar paquete','Se eliminarán todos los archivos del paquete "'+pkg+'". ¿Continuar?',async ()=>{
+  askDelete('Eliminar paquete','Se eliminarán todos los archivos del paquete "'+pkg+'" de la nube. ¿Continuar?',async ()=>{
     const files=_installersCache.filter(x=>(x.package||'Sin categoría')===pkg);
-    for(const f of files){ try{ await dbDeleteInstaller(f.id); }catch(err){ console.warn(err); } }
-    showToast('Paquete eliminado'); renderInstallers();
+    try{
+      const paths=files.map(f=>storagePathFromPublicUrl(f.file_path,'instaladores')).filter(Boolean);
+      if(paths.length) await sb.storage.from('instaladores').remove(paths);
+      const {error}=await sb.from('installers').delete().in('id',files.map(f=>f.id));
+      if(error)throw error;
+      showToast('Paquete eliminado'); renderInstallers();
+    }catch(err){ console.error(err); showToast('No se pudo eliminar el paquete: '+(err.message||''),'danger'); }
   });
 }
+
 
 function computeSearchResults(term){
   const results=[];
@@ -1887,9 +1929,9 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 // llama el flujo de login de Supabase (ver más abajo) una vez confirma sesión y permisos.
 function startLocalApp(){
   initDB().then(()=>{updateStats();renderTemplates();renderTasks();renderNotes();renderCredentials();renderExtensions();renderProcedures();renderResponsibles();renderChains();globalSearch('');closeGlobalSearch();if(!state.drafts.length)newDraft();else loadDraft(state.drafts[0].id);
-    // Precarga el banco de instaladores en memoria (sin pintar la sección) para que el
-    // buscador global pueda encontrarlos aunque nunca hayas entrado a "Instaladores".
-    dbGetAllInstallers().then(list=>{_installersCache=list||[];}).catch(()=>{});
+    // Precarga el banco de instaladores (ahora en la nube) en memoria, sin pintar la sección,
+    // para que el buscador global pueda encontrarlos aunque nunca hayas entrado a "Instaladores".
+    if(window.sb) sb.from('installers').select('*').then(({data})=>{_installersCache=(data||[]).map(r=>({id:r.id,package:r.package,name:r.name,size:r.size,file_path:r.file_path}));}).catch(()=>{});
   }).catch(err=>{console.error('IndexedDB:',err);showToast('No se pudo inicializar el almacenamiento de archivos','danger');});
 }
 
@@ -2624,7 +2666,15 @@ function startLocalApp(){
     window._pendingLocalMigration=[];
     fixAllLegacyIds();
     await pullShared('template_categories', ()=>state.templateCategories, v=>{state.templateCategories=v;});
-    await pullShared('templates', ()=>state.templates, v=>{state.templates=v;});
+    await pullShared('templates', ()=>state.templates, v=>{
+      // Los adjuntos de las plantillas todavía NO viajan a la nube (solo el texto: título,
+      // asunto, cuerpo, categoría). Antes, al traer los datos de la nube, se reemplazaba
+      // TODA la plantilla — incluyendo sus adjuntos — dejándolos en blanco aunque siguieran
+      // ahí guardados. Ahora se conservan los adjuntos que ya tenías en este navegador.
+      const prevAttachments={};
+      (state.templates||[]).forEach(t=>{ if(t.attachments&&t.attachments.length) prevAttachments[t.id]=t.attachments; });
+      state.templates=v.map(t=>({...t, attachments: prevAttachments[t.id]||t.attachments||[]}));
+    });
     await pullShared('extensions', ()=>extensions, v=>{extensions=v;});
     await pullShared('responsibles', ()=>responsibles, v=>{responsibles=v;});
     await pullShared('procedures', ()=>procedures, v=>{procedures=v;});
