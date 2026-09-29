@@ -153,6 +153,7 @@
     <a class="nav-link" href="#" data-section="procedimientos"><i class="bi bi-journal-text me-2"></i><span>Procedimientos</span></a>
     <a class="nav-link" href="#" data-section="responsables"><i class="bi bi-person-badge me-2"></i><span>Responsables</span></a>
     <a class="nav-link" href="#" data-section="cadenas"><i class="bi bi-diagram-3 me-2"></i><span>Cadena de llamadas</span></a>
+    <a class="nav-link" href="#" data-section="links"><i class="bi bi-link-45deg me-2"></i><span>Links</span></a>
     <a class="nav-link" href="#" data-section="instaladores"><i class="bi bi-hdd-stack me-2"></i><span>Instaladores</span></a>
     <a class="nav-link d-none" id="navUsuarios" href="#" data-section="usuarios"><i class="bi bi-people me-2"></i><span>Usuarios</span></a>
   </nav>
@@ -433,6 +434,18 @@
       </div>
     </section>
 
+    <!-- LINKS -->
+    <section id="links" class="app-section d-none">
+      <div class="card p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div><h5 class="mb-1"><i class="bi bi-link-45deg text-primary"></i> Links</h5><div class="small-muted">Enlaces que usa el equipo con frecuencia — compartido con todos.</div></div>
+          <button class="btn btn-primary" onclick="addLink()"><i class="bi bi-plus-lg"></i> Nuevo link</button>
+        </div>
+      </div>
+      <div class="row g-3 mb-3"><div class="col-md-8"><input id="linkSearch" class="form-control" placeholder="Buscar link..." oninput="renderLinks()"></div></div>
+      <div id="linksGrid" class="row g-3"></div>
+    </section>
+
     <!-- INSTALADORES -->
     <section id="instaladores" class="app-section d-none">
       <div class="card p-4 mb-4">
@@ -450,8 +463,12 @@
               <i class="bi bi-file-earmark-zip"></i> Subir archivos / ZIP
               <input id="installerFilesInput" type="file" multiple hidden>
             </label>
+            <button type="button" class="btn btn-outline-secondary" onclick="openInstallerLinkModal()"><i class="bi bi-link-45deg"></i> Agregar enlace</button>
           </div>
         </div>
+      </div>
+      <div class="alert alert-secondary py-2 small-muted mb-3">
+        <i class="bi bi-lightbulb"></i> Si un instalador pesa más de 50 MB no se puede subir directo (límite del plan gratis de Supabase). Súbelo tú mismo a Google Drive/OneDrive y usa <strong>"Agregar enlace"</strong> para dejarlo aquí como un link — sin límite de tamaño.
       </div>
       <div class="alert alert-info d-flex align-items-start gap-2">
         <i class="bi bi-info-circle mt-1"></i>
@@ -529,6 +546,37 @@
       <button class="btn btn-secondary" data-bs-dismiss="modal" onclick="cancelStagedInstallers()">Cancelar</button>
       <button class="btn btn-primary" id="installerStageConfirmBtn" onclick="confirmStagedInstallers()">Guardar</button>
     </div>
+  </div></div>
+</div>
+
+<!-- MODAL LINK -->
+<div class="modal fade" id="linkModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 id="linkModalTitle" class="modal-title">Nuevo link</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="linkId">
+      <label class="form-label">Nombre</label><input id="linkName" class="form-control mb-3" placeholder="Ej. Portal Cívica">
+      <label class="form-label">URL</label><input id="linkUrl" class="form-control mb-3" placeholder="https://...">
+      <label class="form-label">Nota (opcional)</label><textarea id="linkNote" class="form-control" rows="2" placeholder="Para qué sirve"></textarea>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveLink()">Guardar</button></div>
+  </div></div>
+</div>
+
+<!-- MODAL ENLACE DE INSTALADOR (para archivos grandes subidos a Drive/OneDrive) -->
+<div class="modal fade" id="installerLinkModal" tabindex="-1">
+  <div class="modal-dialog"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title">Agregar enlace de instalador</h5><button class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <label class="form-label">Nombre del paquete</label>
+      <input id="installerLinkPackage" class="form-control mb-3" placeholder="Ej. Impresora DATACARD">
+      <label class="form-label">Nombre del archivo</label>
+      <input id="installerLinkName" class="form-control mb-3" placeholder="Ej. Datacard_PAC_GMP.zip">
+      <label class="form-label">Enlace (Google Drive, OneDrive, etc.)</label>
+      <input id="installerLinkUrl" class="form-control" placeholder="https://drive.google.com/...">
+      <div class="small-muted mt-2">Asegúrate de que el enlace tenga permiso "Cualquiera con el enlace puede ver", si no tu equipo no podrá abrirlo.</div>
+    </div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary" onclick="saveInstallerLink()">Guardar</button></div>
   </div></div>
 </div>
 
@@ -850,6 +898,29 @@ function toViewableUrl(dataUrl,filename){
   const blob=dataUrlToBlob(dataUrl,filename);
   return blob?URL.createObjectURL(blob):dataUrl;
 }
+// Sube un archivo real a un bucket de Supabase Storage para que TODO el equipo pueda verlo,
+// sin importar en qué navegador/computador esté cada quien. Se usa para PDF de Procedimientos
+// y Cadenas, adjuntos de Plantillas, e Instaladores.
+function sanitizeStorageName(s){ return String(s||'').replace(/[^a-zA-Z0-9 ._-]/g,'_'); }
+async function uploadToStorageBucket(bucket,folder,file){
+  if(!window.sb) throw new Error('No hay conexión con la nube (recarga la página e inicia sesión de nuevo)');
+  const newName=((window.crypto&&crypto.randomUUID)?crypto.randomUUID():id())+'-'+sanitizeStorageName(file.name);
+  const path=sanitizeStorageName(folder||'general')+'/'+newName;
+  const {error}=await sb.storage.from(bucket).upload(path,file,{upsert:true,contentType:file.type||'application/octet-stream'});
+  if(error){
+    if(/exceeded the maximum allowed size|Payload too large/i.test(error.message||'')){
+      throw new Error('El archivo supera el límite de tamaño del bucket "'+bucket+'" (revísalo en Supabase → Storage; en el plan gratis el máximo es 50 MB por archivo)');
+    }
+    throw error;
+  }
+  const {data:pub}=sb.storage.from(bucket).getPublicUrl(path);
+  return {path,url:pub.publicUrl};
+}
+function storagePathFromPublicUrl(url,bucket){
+  const marker='/object/public/'+bucket+'/';
+  const idx=(url||'').indexOf(marker);
+  return idx===-1?null:decodeURIComponent(url.slice(idx+marker.length));
+}
 function fileToDataURL(file){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -951,7 +1022,7 @@ function showSection(name){
   document.querySelectorAll('.app-section').forEach(s=>s.classList.add('d-none'));
   document.getElementById(name).classList.remove('d-none');
   document.querySelectorAll('.sidebar .nav-link').forEach(a=>a.classList.toggle('active',a.dataset.section===name));
-  document.getElementById('pageTitle').textContent={dashboard:'Inicio',correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores',usuarios:'Usuarios'}[name];
+  document.getElementById('pageTitle').textContent={dashboard:'Inicio',correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',links:'Links',instaladores:'Instaladores',usuarios:'Usuarios'}[name];
   if(name==='correo') renderTemplates();
   if(name==='tareas') renderTasks();
   if(name==='notas') renderNotes();
@@ -960,6 +1031,7 @@ function showSection(name){
   if(name==='procedimientos') renderProcedures();
   if(name==='responsables') renderResponsibles();
   if(name==='cadenas') renderChains();
+  if(name==='links') renderLinks();
   if(name==='instaladores') renderInstallers();
   if(name==='usuarios') renderUsersPanel();
   updateStats();
@@ -1139,7 +1211,19 @@ async function confirmStagedFiles(){
   for(const s of toUpload){
     try{
       const saved=await dbPut(s.file,owner);
-      currentAttachments.push({id:saved.id,name:saved.name,type:saved.type,size:saved.size});
+      const attachment={id:saved.id,name:saved.name,type:saved.type,size:saved.size};
+      // Si esto es una PLANTILLA (compartida con todo el equipo), el adjunto también se sube
+      // a la nube para que cualquiera que la abra pueda verlo/descargarlo, no solo tú.
+      if(window.editingTemplateId){
+        try{
+          const up=await uploadToStorageBucket('archivos','plantillas',s.file);
+          attachment.file_path=up.url;
+        }catch(upErr){
+          console.error('upload attachment:',upErr);
+          showToast('"'+s.file.name+'" se guardó en este navegador, pero no se pudo subir a la nube: '+(upErr.message||''),'danger');
+        }
+      }
+      currentAttachments.push(attachment);
       okCount++;
     }catch(err){
       console.error('dbPut error:',err);
@@ -1179,24 +1263,38 @@ async function renderAttachments(){
   }
 }
 async function previewFile(fileId){
-  const a=currentAttachments.find(x=>String(x.id)===String(fileId)); const item=await dbGet(fileId); if(!item)return;
-  if(currentPreviewUrl)URL.revokeObjectURL(currentPreviewUrl);
-  currentPreviewUrl=item.dataUrl?toViewableUrl(item.dataUrl,item.name||a?.name):'';
-  window._currentPreviewFile={url:currentPreviewUrl,name:item.name||a?.name||'archivo'};
+  const a=currentAttachments.find(x=>String(x.id)===String(fileId));
+  if(!a){showToast('Adjunto no encontrado','danger');return;}
+  let url,name=a.name,type=a.type;
+  if(a.file_path){
+    // Compartido en la nube: cualquiera que abra esta plantilla lo puede ver, no solo tú.
+    url=a.file_path;
+  }else{
+    const item=await dbGet(fileId);
+    if(!item){showToast('Este archivo solo existe en el navegador donde se subió — no está disponible aquí','danger');return;}
+    url=item.dataUrl?toViewableUrl(item.dataUrl,item.name||a.name):''; name=item.name||a.name; type=item.type||a.type;
+  }
+  if(currentPreviewUrl&&currentPreviewUrl.startsWith('blob:'))URL.revokeObjectURL(currentPreviewUrl);
+  currentPreviewUrl=url;
+  window._currentPreviewFile={url,name:name||'archivo'};
   document.getElementById('previewDownloadBtn')?.classList.toggle('d-none',!currentPreviewUrl);
   document.getElementById('previewOpenTabBtn')?.classList.toggle('d-none',!currentPreviewUrl);
   previewEmpty.classList.add('d-none'); pdfViewer.classList.add('d-none'); imageViewer.classList.add('d-none');
-  const type=(item.type||a?.type||'').toLowerCase();
-  if(type==='application/pdf'||/\.pdf$/i.test(item.name||'')){pdfViewer.src=currentPreviewUrl;pdfViewer.classList.remove('d-none');}
-  else if(type.startsWith('image/')||/\.(png|jpe?g|webp|gif)$/i.test(item.name||'')){imageViewer.src=currentPreviewUrl;imageViewer.classList.remove('d-none');}
-  else {previewEmpty.classList.remove('d-none');previewEmpty.innerHTML=`<div class="p-5"><i class="bi bi-file-earmark fs-1"></i><p class="mt-2">No hay vista previa integrada para este tipo de archivo.</p><strong>${esc(item.name)}</strong></div>`;}
+  const typeLower=(type||'').toLowerCase();
+  if(typeLower==='application/pdf'||/\.pdf$/i.test(name||'')){pdfViewer.src=currentPreviewUrl;pdfViewer.classList.remove('d-none');}
+  else if(typeLower.startsWith('image/')||/\.(png|jpe?g|webp|gif)$/i.test(name||'')){imageViewer.src=currentPreviewUrl;imageViewer.classList.remove('d-none');}
+  else {previewEmpty.classList.remove('d-none');previewEmpty.innerHTML=`<div class="p-5"><i class="bi bi-file-earmark fs-1"></i><p class="mt-2">No hay vista previa integrada para este tipo de archivo.</p><strong>${esc(name)}</strong></div>`;}
   document.getElementById('previewCard').scrollIntoView({behavior:'smooth',block:'start'});
 }
-// Descarga genérica: crea un enlace temporal a partir del dataURL guardado en IndexedDB y lo activa.
+// Descarga genérica: funciona tanto con archivos locales (dataURL/blob) como con archivos
+// en la nube (URL https de Supabase Storage) — a estas últimas se les agrega "?download=" para
+// que el navegador las baje en vez de solo abrirlas.
 function downloadDataUrl(dataUrl,filename){
   if(!dataUrl){showToast('El archivo no está disponible para descargar','danger');return;}
+  let url=dataUrl;
+  if(/^https?:\/\//i.test(dataUrl)) url=dataUrl+(dataUrl.includes('?')?'&':'?')+'download='+encodeURIComponent(filename||'archivo');
   const a=document.createElement('a');
-  a.href=dataUrl; a.download=filename||'archivo';
+  a.href=url; a.download=filename||'archivo'; a.target='_blank';
   document.body.appendChild(a); a.click(); a.remove();
 }
 function downloadCurrentPreview(){
@@ -1206,9 +1304,11 @@ function downloadCurrentPreview(){
 }
 async function downloadAttachment(fileId){
   const a=currentAttachments.find(x=>String(x.id)===String(fileId));
+  if(!a){showToast('Adjunto no encontrado','danger');return;}
+  if(a.file_path){ downloadDataUrl(a.file_path,a.name); return; }
   const item=await dbGet(fileId);
-  if(!item){showToast('El archivo no está disponible para descargar','danger');return;}
-  const name=item.name||a?.name||'archivo';
+  if(!item){showToast('Este archivo solo existe en el navegador donde se subió — no está disponible aquí','danger');return;}
+  const name=item.name||a.name||'archivo';
   const url=toViewableUrl(item.dataUrl,name);
   downloadDataUrl(url,name);
   if(url!==item.dataUrl)setTimeout(()=>URL.revokeObjectURL(url),10000);
@@ -1416,23 +1516,74 @@ async function saveProcedure(){
   if(file&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){showToast('Solo se permiten archivos PDF','info');return;}
   try{
     const pid=procedureId.value;let p=procedures.find(x=>String(x.id)===String(pid));
-    if(!p){if(!file){showToast('Selecciona el PDF del procedimiento','info');return;}const meta=await dbPut(file,'procedure');p={id:id(),name,filename:file.name,fileId:meta.id,type:file.type,size:file.size,created:Date.now(),updated:Date.now()};procedures.unshift(p);}
-    else{p.name=name;p.updated=Date.now();if(file){if(p.fileId)await dbDelete(p.fileId);const meta=await dbPut(file,'procedure');p.fileId=meta.id;p.filename=file.name;p.type=file.type;p.size=file.size;}}
-    persistOperations();renderProcedures();closeModalById('procedureModal');showToast('Procedimiento guardado');
-  }catch(err){console.error(err);showToast('No se pudo guardar el PDF','danger');}
+    let filePathUrl=p?p.file_path:'', fileIdLocal=p?p.fileId:null, filename=p?p.filename:'', ftype=p?p.type:'', fsize=p?p.size:0;
+    if(file){
+      showToast('Subiendo PDF a la nube...');
+      const up=await uploadToStorageBucket('archivos','procedimientos',file); // para que TODO el equipo lo vea
+      filePathUrl=up.url;
+      const meta=await dbPut(file,'procedure'); fileIdLocal=meta.id; // respaldo local por si acaso
+      filename=file.name; ftype=file.type; fsize=file.size;
+    }
+    if(!p){
+      if(!file){showToast('Selecciona el PDF del procedimiento','info');return;}
+      p={id:id(),name,filename,fileId:fileIdLocal,file_path:filePathUrl,type:ftype,size:fsize,created:Date.now(),updated:Date.now()};
+      procedures.unshift(p);
+    }else{
+      p.name=name;p.updated=Date.now();
+      if(file){p.fileId=fileIdLocal;p.file_path=filePathUrl;p.filename=filename;p.type=ftype;p.size=fsize;}
+    }
+    persistOperations();renderProcedures();closeModalById('procedureModal');showToast('Procedimiento guardado'+(file?' y subido a la nube':''));
+  }catch(err){console.error(err);showToast('No se pudo guardar el PDF: '+(err.message||''),'danger');}
 }
 function renderProcedures(){
   const q=(document.getElementById('procedureSearch')?.value||'').toLowerCase(),grid=document.getElementById('proceduresGrid');if(!grid)return;
   const list=procedures.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));
   grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card procedure-card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-file-earmark-pdf text-danger me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editProcedure('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteProcedure('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openProcedure('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay procedimientos guardados.</div></div>';
 }
-async function openProcedure(pid){const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;try{const item=await dbGet(p.fileId);if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}if(window._currentManualBlobUrl){URL.revokeObjectURL(window._currentManualBlobUrl);window._currentManualBlobUrl=null;}const url=toViewableUrl(item.dataUrl,item.name||p.filename);if(url!==item.dataUrl)window._currentManualBlobUrl=url;manualViewer.src=url;window._currentManualName=item.name||p.filename||'procedimiento.pdf';manualPreviewCard.classList.remove('d-none');manualPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});}catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}}
+async function openProcedure(pid){
+  const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;
+  try{
+    if(p.file_path){
+      // Con URL en la nube, cualquiera del equipo puede verlo (no depende de este navegador).
+      manualViewer.src=p.file_path;
+      window._currentManualName=p.filename||'procedimiento.pdf';
+      manualPreviewCard.classList.remove('d-none');
+      manualPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});
+      return;
+    }
+    // Respaldo: procedimientos antiguos sin copia en la nube todavía, solo en este navegador.
+    const item=await dbGet(p.fileId);
+    if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}
+    if(window._currentManualBlobUrl){URL.revokeObjectURL(window._currentManualBlobUrl);window._currentManualBlobUrl=null;}
+    const url=toViewableUrl(item.dataUrl,item.name||p.filename);
+    if(url!==item.dataUrl)window._currentManualBlobUrl=url;
+    manualViewer.src=url;window._currentManualName=item.name||p.filename||'procedimiento.pdf';manualPreviewCard.classList.remove('d-none');manualPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}
+}
 function closeManualPreview(){if(window._currentManualBlobUrl){URL.revokeObjectURL(window._currentManualBlobUrl);window._currentManualBlobUrl=null;}manualViewer.src='about:blank';manualPreviewCard.classList.add('d-none');}
 async function deleteProcedure(pid){const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;try{if(p.fileId)await dbDelete(p.fileId);}catch(err){console.warn(err)}procedures=procedures.filter(x=>String(x.id)!==String(pid));persistOperations();renderProcedures();showToast('Procedimiento eliminado');}
 
 let responsibles=JSON.parse(localStorage.getItem('co_responsibles')||'[]');
 let chains=JSON.parse(localStorage.getItem('co_chains')||'[]');
-function persistOperations(){localStorage.setItem('co_extensions',JSON.stringify(extensions));localStorage.setItem('co_procedures',JSON.stringify(procedures));localStorage.setItem('co_responsibles',JSON.stringify(responsibles));localStorage.setItem('co_chains',JSON.stringify(chains));}
+let links=JSON.parse(localStorage.getItem('co_links')||'[]');
+function persistOperations(){localStorage.setItem('co_extensions',JSON.stringify(extensions));localStorage.setItem('co_procedures',JSON.stringify(procedures));localStorage.setItem('co_responsibles',JSON.stringify(responsibles));localStorage.setItem('co_chains',JSON.stringify(chains));localStorage.setItem('co_links',JSON.stringify(links));}
+function addLink(){linkId.value='';linkName.value='';linkUrl.value='';linkNote.value='';linkModalTitle.textContent='Nuevo link';bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).show();}
+function editLink(lid){const l=links.find(x=>String(x.id)===String(lid));if(!l)return;linkId.value=l.id;linkName.value=l.name||'';linkUrl.value=l.url||'';linkNote.value=l.note||'';linkModalTitle.textContent='Editar link';bootstrap.Modal.getOrCreateInstance(document.getElementById('linkModal')).show();}
+function saveLink(){
+  const name=linkName.value.trim(); let url=linkUrl.value.trim(); const note=linkNote.value.trim();
+  if(!name||!url){showToast('Escribe el nombre y la URL','info');return;}
+  if(!/^https?:\/\//i.test(url)) url='https://'+url;
+  const lid=linkId.value, l=links.find(x=>String(x.id)===String(lid));
+  if(l){l.name=name;l.url=url;l.note=note;}
+  else links.unshift({id:id(),name,url,note,created:Date.now()});
+  persistOperations();renderLinks();closeModalById('linkModal');showToast(lid?'Link actualizado':'Link agregado');
+}
+function renderLinks(){
+  const q=(document.getElementById('linkSearch')?.value||'').toLowerCase(),grid=document.getElementById('linksGrid');if(!grid)return;
+  const list=links.filter(x=>((x.name||'')+' '+(x.url||'')+' '+(x.note||'')).toLowerCase().includes(q));
+  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0 text-truncate"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-link-45deg text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm flex-shrink-0"><button class="btn btn-outline-primary" onclick="editLink('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteLink('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div>${x.note?`<div class="small-muted mt-1">${esc(x.note)}</div>`:''}<div class="d-flex gap-2 mt-3"><button class="btn btn-primary flex-grow-1" onclick="window.open('${escAttr(x.url)}','_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir</button><button class="btn btn-outline-secondary" title="Copiar enlace" onclick="copyText('${escAttr(x.url)}','Enlace copiado')"><i class="bi bi-copy"></i></button></div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay links guardados.</div></div>';
+}
+function deleteLink(lid){const l=links.find(x=>String(x.id)===String(lid));if(!l)return;askDelete('Eliminar link','¿Deseas eliminar el link "'+(l.name||'Sin nombre')+'"?',function(){links=links.filter(x=>String(x.id)!==String(lid));persistOperations();renderLinks();showToast('Link eliminado');});}
 function addResponsible(){responsibleId.value='';responsibleCode.value='';responsibleName.value='';responsibleTeam.value='';responsibleModalTitle.textContent='Nuevo responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
 function editResponsible(rid){const r=responsibles.find(x=>String(x.id)===String(rid));if(!r)return;responsibleId.value=r.id;responsibleCode.value=r.code||'';responsibleName.value=r.name||'';responsibleTeam.value=r.team||'';responsibleModalTitle.textContent='Editar responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
 function saveResponsible(){const code=responsibleCode.value.trim(),name=responsibleName.value.trim(),team=responsibleTeam.value.trim();if(!code||!name||!team){showToast('Completa los 3 campos del responsable','info');return;}const rid=responsibleId.value,r=responsibles.find(x=>String(x.id)===String(rid));if(r){r.code=code;r.name=name;r.team=team;}else responsibles.unshift({id:id(),code,name,team,created:Date.now()});persistOperations();renderResponsibles();closeModalById('responsibleModal');showToast('Responsable guardado');}
@@ -1440,9 +1591,50 @@ function renderResponsibles(){const q=(document.getElementById('responsibleSearc
 function deleteResponsible(rid){responsibles=responsibles.filter(x=>String(x.id)!==String(rid));persistOperations();renderResponsibles();showToast('Responsable eliminado');}
 function addChain(){chainId.value='';chainName.value='';chainPdf.value='';chainCurrentFile.textContent='';chainModalTitle.textContent='Nueva cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
 function editChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;chainId.value=c.id;chainName.value=c.name||'';chainPdf.value='';chainCurrentFile.textContent=c.filename?('PDF actual: '+c.filename):'Sin PDF';chainModalTitle.textContent='Editar cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
-async function saveChain(){const name=chainName.value.trim(),file=chainPdf.files?.[0]||null;if(!name){showToast('Escribe el nombre de la cadena','info');return;}if(file&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){showToast('Solo se permiten archivos PDF','info');return;}try{const cid=chainId.value;let c=chains.find(x=>String(x.id)===String(cid));if(!c){if(!file){showToast('Selecciona el PDF de la cadena','info');return;}const meta=await dbPut(file,'chain');c={id:id(),name,filename:file.name,fileId:meta.id,type:file.type,size:file.size,created:Date.now()};chains.unshift(c);}else{c.name=name;if(file){if(c.fileId)await dbDelete(c.fileId);const meta=await dbPut(file,'chain');c.fileId=meta.id;c.filename=file.name;c.type=file.type;c.size=file.size;}}persistOperations();renderChains();closeModalById('chainModal');showToast('Cadena guardada');}catch(err){console.error(err);showToast('No se pudo guardar el PDF','danger');}}
+async function saveChain(){
+  const name=chainName.value.trim(),file=chainPdf.files?.[0]||null;
+  if(!name){showToast('Escribe el nombre de la cadena','info');return;}
+  if(file&&file.type!=='application/pdf'&&!/\.pdf$/i.test(file.name)){showToast('Solo se permiten archivos PDF','info');return;}
+  try{
+    const cid=chainId.value;let c=chains.find(x=>String(x.id)===String(cid));
+    let filePathUrl=c?c.file_path:'', fileIdLocal=c?c.fileId:null, filename=c?c.filename:'', ftype=c?c.type:'', fsize=c?c.size:0;
+    if(file){
+      showToast('Subiendo PDF a la nube...');
+      const up=await uploadToStorageBucket('archivos','cadenas',file);
+      filePathUrl=up.url;
+      const meta=await dbPut(file,'chain'); fileIdLocal=meta.id;
+      filename=file.name; ftype=file.type; fsize=file.size;
+    }
+    if(!c){
+      if(!file){showToast('Selecciona el PDF de la cadena','info');return;}
+      c={id:id(),name,filename,fileId:fileIdLocal,file_path:filePathUrl,type:ftype,size:fsize,created:Date.now()};
+      chains.unshift(c);
+    }else{
+      c.name=name;
+      if(file){c.fileId=fileIdLocal;c.file_path=filePathUrl;c.filename=filename;c.type=ftype;c.size=fsize;}
+    }
+    persistOperations();renderChains();closeModalById('chainModal');showToast('Cadena guardada'+(file?' y subida a la nube':''));
+  }catch(err){console.error(err);showToast('No se pudo guardar el PDF: '+(err.message||''),'danger');}
+}
 function renderChains(){const q=(document.getElementById('chainSearch')?.value||'').toLowerCase(),grid=document.getElementById('chainsGrid');if(!grid)return;const list=chains.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-telephone text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editChain('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteChain('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openChain('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay cadenas guardadas.</div></div>';}
-async function openChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;try{const item=await dbGet(c.fileId);if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}if(window._currentChainBlobUrl){URL.revokeObjectURL(window._currentChainBlobUrl);window._currentChainBlobUrl=null;}const url=toViewableUrl(item.dataUrl,item.name||c.filename);if(url!==item.dataUrl)window._currentChainBlobUrl=url;chainViewer.src=url;window._currentChainName=item.name||c.filename||'cadena.pdf';chainPreviewCard.classList.remove('d-none');chainPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});}catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}}
+async function openChain(cid){
+  const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;
+  try{
+    if(c.file_path){
+      chainViewer.src=c.file_path;
+      window._currentChainName=c.filename||'cadena.pdf';
+      chainPreviewCard.classList.remove('d-none');
+      chainPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});
+      return;
+    }
+    const item=await dbGet(c.fileId);
+    if(!item||!item.dataUrl){showToast('El PDF no está disponible','danger');return;}
+    if(window._currentChainBlobUrl){URL.revokeObjectURL(window._currentChainBlobUrl);window._currentChainBlobUrl=null;}
+    const url=toViewableUrl(item.dataUrl,item.name||c.filename);
+    if(url!==item.dataUrl)window._currentChainBlobUrl=url;
+    chainViewer.src=url;window._currentChainName=item.name||c.filename||'cadena.pdf';chainPreviewCard.classList.remove('d-none');chainPreviewCard.scrollIntoView({behavior:'smooth',block:'start'});
+  }catch(err){console.error(err);showToast('No se pudo abrir el PDF','danger');}
+}
 function closeChainPreview(){if(window._currentChainBlobUrl){URL.revokeObjectURL(window._currentChainBlobUrl);window._currentChainBlobUrl=null;}chainViewer.src='about:blank';chainPreviewCard.classList.add('d-none');}
 async function deleteChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;try{if(c.fileId)await dbDelete(c.fileId);}catch(err){console.warn(err)}chains=chains.filter(x=>String(x.id)!==String(cid));persistOperations();renderChains();showToast('Cadena eliminada');}
 
@@ -1495,12 +1687,6 @@ function renderStagedInstallers(){
 }
 function removeStagedInstaller(i){stagedInstallers.splice(i,1);renderStagedInstallers();}
 function cancelStagedInstallers(){stagedInstallers=[];}
-function sanitizeStorageName(s){ return String(s||'').replace(/[^a-zA-Z0-9 ._-]/g,'_'); }
-function storagePathFromPublicUrl(url,bucket){
-  const marker='/object/public/'+bucket+'/';
-  const idx=(url||'').indexOf(marker);
-  return idx===-1?null:decodeURIComponent(url.slice(idx+marker.length));
-}
 async function uploadInstallerToCloud(file,pkg){
   if(!window.sb) throw new Error('No hay conexión con la nube (recarga la página e inicia sesión de nuevo)');
   const newId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():id();
@@ -1611,6 +1797,47 @@ function deleteInstallerPackage(pkg){
     }catch(err){ console.error(err); showToast('No se pudo eliminar el paquete: '+(err.message||''),'danger'); }
   });
 }
+// Para instaladores que superan el límite de tamaño del bucket (plan gratis: 50 MB): en vez de
+// subir el archivo, se guarda solo un enlace externo (Drive/OneDrive) — el usuario lo sube ahí
+// por su cuenta y aquí solo queda el link, sin límite de tamaño.
+window.openInstallerLinkModal=function(){
+  document.getElementById('installerLinkPackage').value='';
+  document.getElementById('installerLinkName').value='';
+  document.getElementById('installerLinkUrl').value='';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('installerLinkModal')).show();
+};
+// Convierte un enlace normal de Google Drive/OneDrive en uno de descarga directa, para que
+// el botón "Descargar" baje el archivo de una vez en lugar de abrir la vista previa de Drive.
+function normalizeExternalDownloadLink(url){
+  try{
+    let m=url.match(/drive\.google\.com\/file\/d\/([^/]+)/);
+    if(m) return 'https://drive.google.com/uc?export=download&id='+m[1];
+    if(/drive\.google\.com/.test(url)){
+      m=url.match(/[?&]id=([^&]+)/);
+      if(m) return 'https://drive.google.com/uc?export=download&id='+m[1];
+    }
+    if(/1drv\.ms|onedrive\.live\.com|-my\.sharepoint\.com/.test(url)){
+      return url+(url.includes('?')?'&':'?')+'download=1';
+    }
+  }catch(e){}
+  return url;
+}
+window.saveInstallerLink=async function(){
+  const pkg=(document.getElementById('installerLinkPackage').value||'').trim();
+  const name=(document.getElementById('installerLinkName').value||'').trim();
+  const rawUrl=(document.getElementById('installerLinkUrl').value||'').trim();
+  if(!pkg||!name||!rawUrl){showToast('Completa el paquete, el nombre y el enlace','info');return;}
+  if(!/^https?:\/\//i.test(rawUrl)){showToast('El enlace debe empezar con http:// o https://','info');return;}
+  const url=normalizeExternalDownloadLink(rawUrl);
+  try{
+    const newId=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():id();
+    const {error}=await sb.from('installers').insert({id:newId,package:pkg,name,file_path:url,size:null});
+    if(error)throw error;
+    closeModalById('installerLinkModal');
+    showToast('Enlace guardado — el botón "Descargar" bajará el archivo directo');
+    renderInstallers();
+  }catch(err){ console.error(err); showToast('No se pudo guardar el enlace: '+(err.message||''),'danger'); }
+};
 
 
 function computeSearchResults(term){
@@ -1627,6 +1854,7 @@ function computeSearchResults(term){
   scan(procedures,x=>{if(((x.name||'')+' '+(x.filename||'')).toUpperCase().includes(term))add('📚 Procedimiento',x.name,x.filename||'','procedimientos',null,sel('proceduresGrid',x.id))});
   scan(responsibles,x=>{if(((x.code||'')+' '+(x.name||'')+' '+(x.team||'')).toUpperCase().includes(term))add('👤 Responsable',x.name,(x.code||'')+' · '+(x.team||''),'responsables',null,sel('responsiblesGrid',x.id))});
   scan(chains,x=>{if(((x.name||'')+' '+(x.filename||'')).toUpperCase().includes(term))add('📞 Cadena',x.name,x.filename||'','cadenas',null,sel('chainsGrid',x.id))});
+  scan(links,x=>{if(((x.name||'')+' '+(x.url||'')+' '+(x.note||'')).toUpperCase().includes(term))add('🔗 Link',x.name,x.url||'','links',null,sel('linksGrid',x.id))});
   scan((window.state&&state.notes)||[],x=>{const plain=(x.text||'').replace(/<[^>]*>/g,' ').replace(/\s+/g,' ').trim();if(((x.title||'')+' '+plain).toUpperCase().includes(term))add('📝 Nota',x.title,plain.slice(0,90),'notas',null,sel('notesGrid',x.id))});
   scan((window.state&&state.tasks)||[],x=>{if(((x.title||'')+' '+(x.desc||'')).toUpperCase().includes(term))add('📋 Tarea',x.title,x.desc||'','tareas',null,'.task-card[data-id="'+CSS.escape(String(x.id))+'"]')});
   scan((window.state&&state.templates)||[],x=>{if(((x.title||'')+' '+(x.subject||'')+' '+(x.body||'')).toUpperCase().includes(term))add('📧 Plantilla',x.title,x.subject||'','correo',()=>{showSection('correo');openItem('template',x.id);})});
@@ -2197,6 +2425,7 @@ function startLocalApp(){
   setupGridDragReorder('proceduresGrid',()=>procedures,()=>{persistOperations();renderProcedures();});
   setupGridDragReorder('responsiblesGrid',()=>responsibles,()=>{persistOperations();renderResponsibles();});
   setupGridDragReorder('chainsGrid',()=>chains,()=>{persistOperations();renderChains();});
+  setupGridDragReorder('linksGrid',()=>links,()=>{persistOperations();renderLinks();});
 
   // Recordatorios de tareas del tablero: alerta fija abajo a la derecha que NO se cierra sola,
   // más una notificación nativa del navegador (si el usuario la permite) que aparece sin importar
@@ -2354,9 +2583,9 @@ function startLocalApp(){
   window.deleteCurrentDraft=function(){if(!draftId.value)return;askDelete('Eliminar borrador','¿Deseas eliminar este borrador?',function(){state.drafts=state.drafts.filter(x=>x.id!==draftId.value);persist();newDraft();showToast('Borrador eliminado');});};
   window.deleteTask=function(id){const t=state.tasks.find(x=>String(x.id)===String(id));if(!t)return;askDelete('Eliminar tarea','¿Deseas eliminar la tarea "'+(t.title||'Sin título')+'"?',function(){state.tasks=state.tasks.filter(x=>String(x.id)!==String(id));persist();renderTasks();showToast('Tarea eliminada');});};
   window.deleteNote=function(id){const n=state.notes.find(x=>String(x.id)===String(id));if(!n)return;askDelete('Eliminar nota','¿Deseas eliminar la nota "'+(n.title||'Sin título')+'"?',function(){state.notes=state.notes.filter(x=>String(x.id)!==String(id));persist();renderNotes();showToast('Nota eliminada');});};
-  window.deleteProcedure=async function(id){const p=procedures.find(x=>String(x.id)===String(id));if(!p)return;askDelete('Eliminar procedimiento','¿Deseas eliminar el procedimiento "'+(p.name||'Sin nombre')+'"?',async function(){try{if(p.fileId)await dbDelete(p.fileId);}catch(e){}procedures=procedures.filter(x=>String(x.id)!==String(id));persistOperations();renderProcedures();showToast('Procedimiento eliminado');});};
+  window.deleteProcedure=async function(id){const p=procedures.find(x=>String(x.id)===String(id));if(!p)return;askDelete('Eliminar procedimiento','¿Deseas eliminar el procedimiento "'+(p.name||'Sin nombre')+'"?',async function(){try{if(p.fileId)await dbDelete(p.fileId);}catch(e){}try{if(p.file_path){const path=storagePathFromPublicUrl(p.file_path,'archivos');if(path)await sb.storage.from('archivos').remove([path]);}}catch(e){console.warn(e);}procedures=procedures.filter(x=>String(x.id)!==String(id));persistOperations();renderProcedures();showToast('Procedimiento eliminado');});};
   window.deleteResponsible=function(id){const r=responsibles.find(x=>String(x.id)===String(id));if(!r)return;askDelete('Eliminar responsable','¿Deseas eliminar a "'+(r.name||'este responsable')+'"?',function(){responsibles=responsibles.filter(x=>String(x.id)!==String(id));persistOperations();renderResponsibles();showToast('Responsable eliminado');});};
-  window.deleteChain=async function(id){const c=chains.find(x=>String(x.id)===String(id));if(!c)return;askDelete('Eliminar cadena de llamadas','¿Deseas eliminar la cadena "'+(c.name||'Sin nombre')+'"?',async function(){try{if(c.fileId)await dbDelete(c.fileId);}catch(e){}chains=chains.filter(x=>String(x.id)!==String(id));persistOperations();renderChains();showToast('Cadena eliminada');});};
+  window.deleteChain=async function(id){const c=chains.find(x=>String(x.id)===String(id));if(!c)return;askDelete('Eliminar cadena de llamadas','¿Deseas eliminar la cadena "'+(c.name||'Sin nombre')+'"?',async function(){try{if(c.fileId)await dbDelete(c.fileId);}catch(e){}try{if(c.file_path){const path=storagePathFromPublicUrl(c.file_path,'archivos');if(path)await sb.storage.from('archivos').remove([path]);}}catch(e){console.warn(e);}chains=chains.filter(x=>String(x.id)!==String(id));persistOperations();renderChains();showToast('Cadena eliminada');});};
   window.deleteCredential=function(id){const i=credentials.findIndex(x=>String(x.id)===String(id));if(i<0)return;const c=credentials[i];askDelete('Eliminar clave','¿Deseas eliminar la clave "'+(c.name||'Sin nombre')+'"?',function(){credentials.splice(i,1);persistCredentials();renderCredentials();showToast('Clave eliminada');});};
   window.deleteExtension=function(id){const i=extensions.findIndex(x=>String(x.id)===String(id));if(i<0)return;const x=extensions[i];askDelete('Eliminar extensión','¿Deseas eliminar la extensión "'+(x.name||x.number||'Sin nombre')+'"?',function(){extensions.splice(i,1);persistOperations();renderExtensions();showToast('Extensión eliminada');});};
 
@@ -2378,8 +2607,8 @@ function startLocalApp(){
   const sb=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   window.sb=sb; // queda disponible para cuando migremos los datos de cada sección más adelante
 
-  const ALL_SECTIONS=['correo','tareas','notas','credenciales','extensiones','procedimientos','responsables','cadenas','instaladores'];
-  const SECTION_LABELS={correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',instaladores:'Instaladores'};
+  const ALL_SECTIONS=['correo','tareas','notas','credenciales','extensiones','procedimientos','responsables','cadenas','links','instaladores'];
+  const SECTION_LABELS={correo:'Correo / Plantillas',tareas:'Tablero',notas:'Notas importantes',credenciales:'Claves / Accesos',extensiones:'Extensiones',procedimientos:'Procedimientos',responsables:'Responsables',cadenas:'Cadena de llamadas',links:'Links',instaladores:'Instaladores'};
 
   function showAuthError(msg){
     const el=document.getElementById('authError');
@@ -2556,8 +2785,11 @@ function startLocalApp(){
       toLocal:r=>({id:r.id,name:r.name,color:r.color})
     },
     templates:{
-      toRow:t=>({id:t.id,title:t.title||'',subject:t.subject||'',to_field:t.to||'',cc:t.cc||'',body:t.body||'',category_id:t.category||null,attachments:[]}),
-      toLocal:r=>({id:r.id,title:r.title||'',subject:r.subject||'',to:r.to_field||'',cc:r.cc||'',body:r.body||'',category:r.category_id||'',attachments:[]})
+      toRow:t=>({id:t.id,title:t.title||'',subject:t.subject||'',to_field:t.to||'',cc:t.cc||'',body:t.body||'',category_id:t.category||null,
+        // Solo se sincronizan los adjuntos que ya tienen su copia en la nube (file_path); los que
+        // todavía no se subieron con éxito se quedan fuera para no fingir que están compartidos.
+        attachments:(t.attachments||[]).filter(a=>a.file_path).map(a=>({id:a.id,name:a.name,type:a.type,size:a.size,file_path:a.file_path}))}),
+      toLocal:r=>({id:r.id,title:r.title||'',subject:r.subject||'',to:r.to_field||'',cc:r.cc||'',body:r.body||'',category:r.category_id||'',attachments:r.attachments||[]})
     },
     extensions:{
       toRow:x=>({id:x.id,name:x.name||'',number:x.number||'',category:x.category||'',note:x.note||''}),
@@ -2574,6 +2806,10 @@ function startLocalApp(){
     chains:{
       toRow:x=>({id:x.id,name:x.name||'',filename:x.filename||'',file_path:x.file_path||null,file_id:x.fileId||null}),
       toLocal:r=>({id:r.id,name:r.name||'',filename:r.filename||'',file_path:r.file_path||'',fileId:r.file_id||null})
+    },
+    links:{
+      toRow:x=>({id:x.id,name:x.name||'',url:x.url||'',note:x.note||''}),
+      toLocal:r=>({id:r.id,name:r.name||'',url:r.url||'',note:r.note||''})
     },
     notes:{
       toRow:n=>({id:n.id,title:n.title||'',content_html:n.text||'',important:!!n.important}),
@@ -2613,6 +2849,7 @@ function startLocalApp(){
     cloudSyncShared('responsibles', responsibles||[], MAP.responsibles.toRow);
     cloudSyncShared('procedures', procedures||[], MAP.procedures.toRow);
     cloudSyncShared('chains', chains||[], MAP.chains.toRow);
+    cloudSyncShared('links', links||[], MAP.links.toRow);
   };
   window.persistCredentials=function(){
     _origPersistCredentials();
@@ -2667,18 +2904,21 @@ function startLocalApp(){
     fixAllLegacyIds();
     await pullShared('template_categories', ()=>state.templateCategories, v=>{state.templateCategories=v;});
     await pullShared('templates', ()=>state.templates, v=>{
-      // Los adjuntos de las plantillas todavía NO viajan a la nube (solo el texto: título,
-      // asunto, cuerpo, categoría). Antes, al traer los datos de la nube, se reemplazaba
-      // TODA la plantilla — incluyendo sus adjuntos — dejándolos en blanco aunque siguieran
-      // ahí guardados. Ahora se conservan los adjuntos que ya tenías en este navegador.
-      const prevAttachments={};
-      (state.templates||[]).forEach(t=>{ if(t.attachments&&t.attachments.length) prevAttachments[t.id]=t.attachments; });
-      state.templates=v.map(t=>({...t, attachments: prevAttachments[t.id]||t.attachments||[]}));
+      // Los adjuntos que YA se subieron a la nube (tienen file_path) vienen correctos desde
+      // la nube, compartidos con todo el equipo. Los que todavía no se subieron con éxito
+      // (por ejemplo, se guardaron sin conexión) se conservan tal cual estaban en este navegador.
+      const prevLocalOnly={};
+      (state.templates||[]).forEach(t=>{
+        const localOnly=(t.attachments||[]).filter(a=>!a.file_path);
+        if(localOnly.length) prevLocalOnly[t.id]=localOnly;
+      });
+      state.templates=v.map(t=>({...t, attachments:[...(t.attachments||[]),...(prevLocalOnly[t.id]||[])]}));
     });
     await pullShared('extensions', ()=>extensions, v=>{extensions=v;});
     await pullShared('responsibles', ()=>responsibles, v=>{responsibles=v;});
     await pullShared('procedures', ()=>procedures, v=>{procedures=v;});
     await pullShared('chains', ()=>chains, v=>{chains=v;});
+    await pullShared('links', ()=>links, v=>{links=v;});
     await pullPrivate('notes', ()=>state.notes, v=>{state.notes=v;});
     await pullPrivate('tasks', ()=>state.tasks, v=>{state.tasks=v;});
     await pullPrivate('credentials', ()=>credentials, v=>{credentials=v;});
