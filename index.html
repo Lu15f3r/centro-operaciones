@@ -2629,6 +2629,12 @@ function startLocalApp(){
   };
   window.doLogout=async function(){
     await sb.auth.signOut();
+    // Borra todo lo de este navegador al salir, para que si alguien más entra después en el
+    // mismo equipo no vea ni un rastro de tus notas, tareas o claves privadas.
+    ['co_templates','co_drafts','co_tasks','co_notes','co_item_order','co_template_categories',
+     'co_extensions','co_procedures','co_responsibles','co_chains','co_links','co_credentials','co_owner_uid'
+    ].forEach(k=>localStorage.removeItem(k));
+    try{ indexedDB.deleteDatabase(DB_NAME); }catch(e){}
     location.reload();
   };
 
@@ -2650,6 +2656,22 @@ function startLocalApp(){
     if(!user){ document.body.classList.remove('authed'); return; }
     const profile=await loadOrCreateMyProfile(user);
     if(!profile){ showAuthError('No se pudo cargar tu perfil de permisos.'); return; }
+    // MUY IMPORTANTE (privacidad): si este navegador tiene datos guardados de OTRO usuario
+    // (por ejemplo, alguien cerró sesión y otra persona entró en el mismo computador sin que
+    // se hayan borrado), se limpian antes de continuar. Sin esto, la persona nueva podía ver
+    // — y hasta migrar a la nube a su propio nombre — las notas/tareas/claves de quien usó
+    // este navegador antes que ella.
+    const savedOwner=localStorage.getItem('co_owner_uid');
+    if(savedOwner && savedOwner!==user.id){
+      ['co_templates','co_drafts','co_tasks','co_notes','co_item_order','co_template_categories',
+       'co_extensions','co_procedures','co_responsibles','co_chains','co_links','co_credentials'
+      ].forEach(k=>localStorage.removeItem(k));
+      try{ await new Promise(res=>{ const req=indexedDB.deleteDatabase(DB_NAME); req.onsuccess=res; req.onerror=res; req.onblocked=res; }); db=undefined; }catch(e){}
+      state.templates=[]; state.drafts=[]; state.tasks=[]; state.notes=[]; state.itemOrder=[]; state.templateCategories=[];
+      extensions=[]; procedures=[]; responsibles=[]; chains=[]; links=[]; credentials=[];
+      showToast('Se limpiaron datos de otra sesión que quedaron en este navegador, por privacidad');
+    }
+    localStorage.setItem('co_owner_uid', user.id);
     window.myProfile=profile;
     window.mySections=profile.sections||[];
 
