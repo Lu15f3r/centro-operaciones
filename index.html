@@ -2662,14 +2662,19 @@ function startLocalApp(){
     // — y hasta migrar a la nube a su propio nombre — las notas/tareas/claves de quien usó
     // este navegador antes que ella.
     const savedOwner=localStorage.getItem('co_owner_uid');
-    if(savedOwner && savedOwner!==user.id){
+    // OJO: antes solo limpiaba si YA había una "marca de dueño" distinta. Pero un navegador que
+    // tenía datos guardados de ANTES de este arreglo nunca llegó a tener esa marca — así que
+    // nunca se limpiaba. Ahora se limpia siempre que la marca no sea exactamente este usuario
+    // (incluye el caso de "no hay marca todavía pero sí hay datos sueltos").
+    if(savedOwner!==user.id){
+      const habiaAlgo=(state.templates||[]).length||(state.notes||[]).length||(state.tasks||[]).length||(extensions||[]).length||(procedures||[]).length||(responsibles||[]).length||(chains||[]).length||(links||[]).length||(credentials||[]).length;
       ['co_templates','co_drafts','co_tasks','co_notes','co_item_order','co_template_categories',
        'co_extensions','co_procedures','co_responsibles','co_chains','co_links','co_credentials'
       ].forEach(k=>localStorage.removeItem(k));
       try{ await new Promise(res=>{ const req=indexedDB.deleteDatabase(DB_NAME); req.onsuccess=res; req.onerror=res; req.onblocked=res; }); db=undefined; }catch(e){}
       state.templates=[]; state.drafts=[]; state.tasks=[]; state.notes=[]; state.itemOrder=[]; state.templateCategories=[];
       extensions=[]; procedures=[]; responsibles=[]; chains=[]; links=[]; credentials=[];
-      showToast('Se limpiaron datos de otra sesión que quedaron en este navegador, por privacidad');
+      if(habiaAlgo) showToast('Se limpiaron datos de otra sesión que quedaron en este navegador, por privacidad');
     }
     localStorage.setItem('co_owner_uid', user.id);
     window.myProfile=profile;
