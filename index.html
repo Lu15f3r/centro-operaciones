@@ -982,9 +982,11 @@ function dbDeleteInstaller(fileId){
   });
 }
 async function dbPut(file, owner){
+  if(!db) await initDB();
   const dataUrl=await fileToDataURL(file);
   const realType=inferMimeType(file);
   return new Promise((resolve,reject)=>{
+    if(!db)return reject(new Error('Base de archivos no inicializada'));
     const item={id:id(),owner,name:file.name,type:realType,size:file.size,dataUrl,created:Date.now()};
     const tx=db.transaction(STORE,'readwrite');
     tx.objectStore(STORE).put(item);
@@ -1474,7 +1476,7 @@ function renderExtensions(){
       <div class="card extension-card h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}">
         <div class="d-flex justify-content-between">
           <h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(x.name)}</h6>
-          <div class="btn-group btn-group-sm">
+          <div class="btn-group btn-group-sm admin-only">
             <button type="button" class="btn btn-outline-primary js-ext-edit" data-id="${escAttr(x.id)}"><i class="bi bi-pencil"></i></button>
             <button type="button" class="btn btn-outline-danger js-ext-delete" data-id="${escAttr(x.id)}"><i class="bi bi-trash"></i></button>
           </div>
@@ -1538,7 +1540,7 @@ async function saveProcedure(){
 function renderProcedures(){
   const q=(document.getElementById('procedureSearch')?.value||'').toLowerCase(),grid=document.getElementById('proceduresGrid');if(!grid)return;
   const list=procedures.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));
-  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card procedure-card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-file-earmark-pdf text-danger me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editProcedure('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteProcedure('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openProcedure('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay procedimientos guardados.</div></div>';
+  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card procedure-card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-file-earmark-pdf text-danger me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm admin-only"><button class="btn btn-outline-primary" onclick="editProcedure('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteProcedure('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openProcedure('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay procedimientos guardados.</div></div>';
 }
 async function openProcedure(pid){
   const p=procedures.find(x=>String(x.id)===String(pid));if(!p)return;
@@ -1581,13 +1583,13 @@ function saveLink(){
 function renderLinks(){
   const q=(document.getElementById('linkSearch')?.value||'').toLowerCase(),grid=document.getElementById('linksGrid');if(!grid)return;
   const list=links.filter(x=>((x.name||'')+' '+(x.url||'')+' '+(x.note||'')).toLowerCase().includes(q));
-  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0 text-truncate"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-link-45deg text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm flex-shrink-0"><button class="btn btn-outline-primary" onclick="editLink('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteLink('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div>${x.note?`<div class="small-muted mt-1">${esc(x.note)}</div>`:''}<div class="d-flex gap-2 mt-3"><button class="btn btn-primary flex-grow-1" onclick="window.open('${escAttr(x.url)}','_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir</button><button class="btn btn-outline-secondary" title="Copiar enlace" onclick="copyText('${escAttr(x.url)}','Enlace copiado')"><i class="bi bi-copy"></i></button></div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay links guardados.</div></div>';
+  grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0 text-truncate"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-link-45deg text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm admin-only flex-shrink-0"><button class="btn btn-outline-primary" onclick="editLink('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteLink('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div>${x.note?`<div class="small-muted mt-1">${esc(x.note)}</div>`:''}<div class="d-flex gap-2 mt-3"><button class="btn btn-primary flex-grow-1" onclick="window.open('${escAttr(x.url)}','_blank')"><i class="bi bi-box-arrow-up-right"></i> Abrir</button><button class="btn btn-outline-secondary" title="Copiar enlace" onclick="copyText('${escAttr(x.url)}','Enlace copiado')"><i class="bi bi-copy"></i></button></div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay links guardados.</div></div>';
 }
 function deleteLink(lid){const l=links.find(x=>String(x.id)===String(lid));if(!l)return;askDelete('Eliminar link','¿Deseas eliminar el link "'+(l.name||'Sin nombre')+'"?',function(){links=links.filter(x=>String(x.id)!==String(lid));persistOperations();renderLinks();showToast('Link eliminado');});}
 function addResponsible(){responsibleId.value='';responsibleCode.value='';responsibleName.value='';responsibleTeam.value='';responsibleModalTitle.textContent='Nuevo responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
 function editResponsible(rid){const r=responsibles.find(x=>String(x.id)===String(rid));if(!r)return;responsibleId.value=r.id;responsibleCode.value=r.code||'';responsibleName.value=r.name||'';responsibleTeam.value=r.team||'';responsibleModalTitle.textContent='Editar responsable';bootstrap.Modal.getOrCreateInstance(document.getElementById('responsibleModal')).show();}
 function saveResponsible(){const code=responsibleCode.value.trim(),name=responsibleName.value.trim(),team=responsibleTeam.value.trim();if(!code||!name||!team){showToast('Completa los 3 campos del responsable','info');return;}const rid=responsibleId.value,r=responsibles.find(x=>String(x.id)===String(rid));if(r){r.code=code;r.name=name;r.team=team;}else responsibles.unshift({id:id(),code,name,team,created:Date.now()});persistOperations();renderResponsibles();closeModalById('responsibleModal');showToast('Responsable guardado');}
-function renderResponsibles(){const q=(document.getElementById('responsibleSearch')?.value||'').toLowerCase(),grid=document.getElementById('responsiblesGrid');if(!grid)return;const list=responsibles.filter(x=>((x.code||'')+' '+(x.name||'')+' '+(x.team||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editResponsible('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteResponsible('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted"><strong>Código:</strong> ${esc(x.code)}</div><div class="small-muted"><strong>Equipo:</strong> ${esc(x.team)}</div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay responsables guardados.</div></div>';}
+function renderResponsibles(){const q=(document.getElementById('responsibleSearch')?.value||'').toLowerCase(),grid=document.getElementById('responsiblesGrid');if(!grid)return;const list=responsibles.filter(x=>((x.code||'')+' '+(x.name||'')+' '+(x.team||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> ${esc(x.name)}</h6><div class="btn-group btn-group-sm admin-only"><button class="btn btn-outline-primary" onclick="editResponsible('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteResponsible('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted"><strong>Código:</strong> ${esc(x.code)}</div><div class="small-muted"><strong>Equipo:</strong> ${esc(x.team)}</div></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay responsables guardados.</div></div>';}
 function deleteResponsible(rid){responsibles=responsibles.filter(x=>String(x.id)!==String(rid));persistOperations();renderResponsibles();showToast('Responsable eliminado');}
 function addChain(){chainId.value='';chainName.value='';chainPdf.value='';chainCurrentFile.textContent='';chainModalTitle.textContent='Nueva cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
 function editChain(cid){const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;chainId.value=c.id;chainName.value=c.name||'';chainPdf.value='';chainCurrentFile.textContent=c.filename?('PDF actual: '+c.filename):'Sin PDF';chainModalTitle.textContent='Editar cadena de llamadas';bootstrap.Modal.getOrCreateInstance(document.getElementById('chainModal')).show();}
@@ -1616,7 +1618,7 @@ async function saveChain(){
     persistOperations();renderChains();closeModalById('chainModal');showToast('Cadena guardada'+(file?' y subida a la nube':''));
   }catch(err){console.error(err);showToast('No se pudo guardar el PDF: '+(err.message||''),'danger');}
 }
-function renderChains(){const q=(document.getElementById('chainSearch')?.value||'').toLowerCase(),grid=document.getElementById('chainsGrid');if(!grid)return;const list=chains.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-telephone text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm"><button class="btn btn-outline-primary" onclick="editChain('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteChain('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openChain('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay cadenas guardadas.</div></div>';}
+function renderChains(){const q=(document.getElementById('chainSearch')?.value||'').toLowerCase(),grid=document.getElementById('chainsGrid');if(!grid)return;const list=chains.filter(x=>((x.name||'')+' '+(x.filename||'')).toLowerCase().includes(q));grid.innerHTML=list.length?list.map(x=>`<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border drag-card" draggable="false" data-drag-id="${escAttr(x.id)}"><div class="d-flex justify-content-between gap-2"><h6 class="mb-0"><i class="bi bi-grip-vertical drag-handle" title="Arrastra para reordenar"></i> <i class="bi bi-telephone text-primary me-1"></i>${esc(x.name)}</h6><div class="btn-group btn-group-sm admin-only"><button class="btn btn-outline-primary" onclick="editChain('${escAttr(x.id)}')"><i class="bi bi-pencil"></i></button><button class="btn btn-outline-danger" onclick="deleteChain('${escAttr(x.id)}')"><i class="bi bi-trash"></i></button></div></div><div class="small-muted mt-2 text-truncate">${esc(x.filename||'Sin PDF')}</div><button class="btn btn-primary w-100 mt-3" onclick="openChain('${escAttr(x.id)}')"><i class="bi bi-eye"></i> Ver PDF</button></div></div>`).join(''):'<div class="col-12"><div class="dropzone">No hay cadenas guardadas.</div></div>';}
 async function openChain(cid){
   const c=chains.find(x=>String(x.id)===String(cid));if(!c)return;
   try{
@@ -1752,13 +1754,13 @@ async function renderInstallers(){
     return `<div class="col-md-6 col-xl-4"><div class="card p-3 h-100 border">
       <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
         <h6 class="mb-0 text-truncate"><i class="bi bi-folder-fill text-warning me-1"></i>${esc(pkg)}</h6>
-        <button class="btn btn-sm btn-outline-danger flex-shrink-0" title="Eliminar paquete" onclick="deleteInstallerPackage('${escAttr(pkg)}')"><i class="bi bi-trash"></i></button>
+        <button class="btn btn-sm btn-outline-danger flex-shrink-0 admin-only" title="Eliminar paquete" onclick="deleteInstallerPackage('${escAttr(pkg)}')"><i class="bi bi-trash"></i></button>
       </div>
       <div class="small-muted mb-2">${files.length} archivo(s) · ${formatBytes(pkgBytes)}</div>
       <div class="d-flex flex-column gap-2">
         ${files.map(x=>`<div class="attachment d-flex justify-content-between align-items-center border rounded p-2">
           <div class="text-truncate me-2"><i class="bi ${iconForInstaller(x.name)} me-2"></i><span class="text-truncate">${esc(x.name)}</span><div class="small-muted">${formatBytes(x.size||0)}</div></div>
-          <div class="btn-group btn-group-sm flex-shrink-0">
+          <div class="btn-group btn-group-sm admin-only flex-shrink-0">
             <button class="btn btn-outline-primary" title="Descargar" onclick="downloadInstaller('${escAttr(x.id)}')"><i class="bi bi-download"></i></button>
             <button class="btn btn-outline-danger" title="Eliminar" onclick="deleteInstaller('${escAttr(x.id)}')"><i class="bi bi-x"></i></button>
           </div></div>`).join('')}
@@ -2017,13 +2019,27 @@ function renderCredentials(){
 }
 
 function escAttr(s){return String(s??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+// Ojito del modal de claves: muestra/oculta la contraseña mientras la escribes o editas.
+function toggleCredentialPassword(){
+  const el=document.getElementById('credentialPassword'); if(!el)return;
+  const show=el.type==='password';
+  el.type=show?'text':'password';
+  const icon=document.querySelector('#credentialModal .input-group .btn i');
+  if(icon)icon.className=show?'bi bi-eye-slash':'bi bi-eye';
+}
+function resetCredentialPasswordEye(){
+  const el=document.getElementById('credentialPassword'); if(el)el.type='password';
+  const icon=document.querySelector('#credentialModal .input-group .btn i'); if(icon)icon.className='bi bi-eye';
+}
 function addCredential(){
+  resetCredentialPasswordEye();
   credentialId.value='';credentialName.value='';credentialUser.value='';credentialPassword.value='';credentialNote.value='';
   document.getElementById('credentialModalTitle').textContent='Nueva clave';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('credentialModal')).show();
 }
 function editCredential(credentialIdValue){
   const c=credentials.find(x=>String(x.id)===String(credentialIdValue));if(!c)return;
+  resetCredentialPasswordEye();
   credentialId.value=c.id;credentialName.value=c.name;credentialUser.value=c.user||'';credentialPassword.value=c.password||'';credentialNote.value=c.note||'';
   document.getElementById('credentialModalTitle').textContent='Editar clave';
   bootstrap.Modal.getOrCreateInstance(document.getElementById('credentialModal')).show();
@@ -2272,7 +2288,7 @@ function startLocalApp(){
       const isActive=active==='sin_categoria';
       html+='<button type="button" class="btn btn-sm '+(isActive?'btn-dark':'btn-outline-secondary')+'" onclick="setTemplateCategoryFilter(\'sin_categoria\')">Sin categoría ('+counts['']+')</button>';
     }
-    html+='<button type="button" class="btn btn-sm btn-outline-primary ms-auto" onclick="openCategoryManager()" title="Crear, renombrar o borrar categorías"><i class="bi bi-gear"></i> Categorías</button>';
+    html+='<button type="button" class="btn btn-sm btn-outline-primary ms-auto admin-only" onclick="openCategoryManager()" title="Crear, renombrar o borrar categorías"><i class="bi bi-gear"></i> Categorías</button>';
     host.innerHTML=html;
   }
   // --- Recuperación de borradores sueltos: red de seguridad para que nada de lo escrito ---
@@ -2347,7 +2363,7 @@ function startLocalApp(){
     });
     templateList.innerHTML=items.length?items.map(x=>{
       const meta=templateCatMeta(x.category);
-      return '<div class="list-group-item template-item" draggable="false" data-key="'+x.type+':'+escAttr(x.id)+'" style="border-left:5px solid '+meta.color+'"><div class="d-flex align-items-start gap-2"><span class="drag-handle" title="Arrastra para reordenar"><i class="bi bi-grip-vertical"></i></span><div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-2 flex-grow-1" style="min-width:0"><div class="flex-grow-1" onclick="openItem(\''+x.type+'\',\''+escAttr(x.id)+'\')" style="cursor:pointer;min-width:0"><strong>'+esc(x.title||x.subject||'Sin título')+'</strong><div class="small-muted text-truncate">'+esc(x.subject||'Sin asunto')+'</div></div><div class="template-actions"><select class="form-select form-select-sm" style="width:auto;max-width:180px" title="Categoría" onclick="event.stopPropagation()" onchange="event.stopPropagation();setTemplateCategory(\''+escAttr(x.id)+'\',this.value)">'+templateCatOptionsHtml(x.category)+'</select><button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();editTemplate(\''+escAttr(x.id)+'\')">Editar</button><button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();deleteTemplate(\''+escAttr(x.id)+'\')">Eliminar</button></div></div></div></div>';
+      return '<div class="list-group-item template-item" draggable="false" data-key="'+x.type+':'+escAttr(x.id)+'" style="border-left:5px solid '+meta.color+'"><div class="d-flex align-items-start gap-2"><span class="drag-handle" title="Arrastra para reordenar"><i class="bi bi-grip-vertical"></i></span><div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-start gap-2 flex-grow-1" style="min-width:0"><div class="flex-grow-1" onclick="openItem(\''+x.type+'\',\''+escAttr(x.id)+'\')" style="cursor:pointer;min-width:0"><strong>'+esc(x.title||x.subject||'Sin título')+'</strong><div class="small-muted text-truncate">'+esc(x.subject||'Sin asunto')+'</div></div><div class="template-actions admin-only"><select class="form-select form-select-sm" style="width:auto;max-width:180px" title="Categoría" onclick="event.stopPropagation()" onchange="event.stopPropagation();setTemplateCategory(\''+escAttr(x.id)+'\',this.value)">'+templateCatOptionsHtml(x.category)+'</select><button type="button" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();editTemplate(\''+escAttr(x.id)+'\')">Editar</button><button type="button" class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation();deleteTemplate(\''+escAttr(x.id)+'\')">Eliminar</button></div></div></div></div>';
     }).join(''):'<div class="p-4 text-center text-secondary">No hay plantillas.</div>';
     renderTemplateCategoryFilterPills();
     updateDraftRecoveryBadge();
@@ -2572,7 +2588,16 @@ function startLocalApp(){
     }
     document.removeEventListener('click',autoRequestNotifOnce);
   },{once:true});
-  window.openItem=function(type,id){if(type==='draft'){editingTemplateId='';loadDraft(id);return;}editTemplate(id);};
+  window.openItem=function(type,id){
+    if(type==='draft'){editingTemplateId='';loadDraft(id);return;}
+    if(window.myProfile&&myProfile.role==='admin'){editTemplate(id);return;}
+    // Quien no es administrador usa la plantilla como una COPIA personal (borrador): puede
+    // llenarla y copiarla, pero nunca modifica la plantilla compartida original.
+    const t=state.templates.find(x=>String(x.id)===String(id)); if(!t)return;
+    editingTemplateId='';
+    const d=blankDraft(); d.title=t.title||''; d.to=t.to||''; d.cc=t.cc||''; d.subject=t.subject||''; d.body=t.body||''; d.attachments=(t.attachments||[]).map(a=>({...a}));
+    state.drafts.unshift(d); persist(); showSection('correo'); loadDraft(d.id);
+  };
   window.saveCurrentDraft=function(){
     const data={title:(document.getElementById('draftTitle')?.value||'').trim(),to:to.value.trim(),cc:cc.value.trim(),subject:subject.value.trim(),body:body.innerHTML,attachments:currentAttachments,updated:Date.now()};
     if(editingTemplateId){const t=state.templates.find(x=>String(x.id)===String(editingTemplateId));if(t){Object.assign(t,data);persist();renderTemplates();saveStatus.textContent='Plantilla guardada '+new Date().toLocaleTimeString();showToast('Plantilla actualizada');return;}}
@@ -2671,7 +2696,9 @@ function startLocalApp(){
       ['co_templates','co_drafts','co_tasks','co_notes','co_item_order','co_template_categories',
        'co_extensions','co_procedures','co_responsibles','co_chains','co_links','co_credentials'
       ].forEach(k=>localStorage.removeItem(k));
-      try{ await new Promise(res=>{ const req=indexedDB.deleteDatabase(DB_NAME); req.onsuccess=res; req.onerror=res; req.onblocked=res; }); db=undefined; }catch(e){}
+      // (Ya no se borra la base de archivos de IndexedDB aquí: borrarla y reabrirla en el mismo
+      // instante dejaba la base "no inicializada" al guardar un PDF. No hace falta para la
+      // privacidad: ningún procedimiento/cadena/plantilla referencia ya esos archivos sueltos.)
       state.templates=[]; state.drafts=[]; state.tasks=[]; state.notes=[]; state.itemOrder=[]; state.templateCategories=[];
       extensions=[]; procedures=[]; responsibles=[]; chains=[]; links=[]; credentials=[];
       if(habiaAlgo) showToast('Se limpiaron datos de otra sesión que quedaron en este navegador, por privacidad');
@@ -2691,6 +2718,10 @@ function startLocalApp(){
     }
 
     document.body.classList.add('authed');
+    // Solo los administradores crean/editan/borran en las secciones compartidas. Esta clase
+    // oculta esos botones para los demás; la protección real está en las reglas de la base de
+    // datos (RLS) y en las funciones de abajo, esto evita mostrar botones que serían rechazados.
+    document.body.classList.toggle('is-admin', profile.role==='admin');
     const badge=document.getElementById('authUserBadge');
     if(badge){ badge.textContent=(profile.full_name||profile.email)+(profile.role==='admin'?' (admin)':''); badge.classList.remove('d-none'); }
 
@@ -2779,6 +2810,8 @@ function startLocalApp(){
 
   async function cloudSyncShared(table, localArr, toRow){
     if(!window.sb||!localArr)return;
+    // Las tablas compartidas solo las modifica un administrador; para los demás son de solo lectura.
+    if(!window.myProfile||myProfile.role!=='admin')return;
     try{
       if(localArr.length){
         const {error}=await sb.from(table).upsert(localArr.map(toRow));
@@ -2915,6 +2948,8 @@ function startLocalApp(){
     const {data,error}=await sb.from(table).select('*');
     if(error){console.error('pull '+table,error);showToast('No se pudo leer '+table+' de la nube: '+(error.message||''),'danger');return;}
     const local=getLocal()||[];
+    const isAdmin=window.myProfile&&myProfile.role==='admin';
+    if(!isAdmin){ setLocal((data||[]).map(MAP[table].toLocal)); return; } // no-admin: la nube manda siempre
     if(data&&data.length) setLocal(data.map(MAP[table].toLocal));
     else if(local.length) window._pendingLocalMigration.push(table);
   }
@@ -2968,6 +3003,33 @@ function startLocalApp(){
     document.getElementById('cloudMigrationBanner')?.remove();
     showToast('Listo — tus datos ya están en la nube');
   };
+})();
+</script>
+
+<!-- ===================== SOLO ADMINISTRADORES EDITAN LO COMPARTIDO ===================== -->
+<script>
+(function(){
+  // Capa extra de seguridad en pantalla: aunque alguien lograra mostrar un botón oculto, estas
+  // funciones se niegan a ejecutarse si el usuario no es administrador. (La protección de
+  // verdad vive en la base de datos con RLS; esto solo evita acciones locales confusas.)
+  const ADMIN_ONLY_FUNCTIONS=[
+    'newTemplate','saveTemplate','editTemplate','deleteTemplate','setTemplateCategory','openCategoryManager',
+    'addTemplateCategory','updateTemplateCategoryName','updateTemplateCategoryColor','deleteTemplateCategory',
+    'addExtension','editExtension','saveExtension','deleteExtension',
+    'addProcedure','editProcedure','saveProcedure','deleteProcedure',
+    'addResponsible','editResponsible','saveResponsible','deleteResponsible',
+    'addChain','editChain','saveChain','deleteChain',
+    'addLink','editLink','saveLink','deleteLink',
+    'openInstallerLinkModal','saveInstallerLink','confirmStagedInstallers','deleteInstaller','deleteInstallerPackage'
+  ];
+  ADMIN_ONLY_FUNCTIONS.forEach(name=>{
+    const orig=window[name];
+    if(typeof orig!=='function')return;
+    window[name]=function(...args){
+      if(!window.myProfile||myProfile.role!=='admin'){ showToast('Solo un administrador puede hacer esto','danger'); return; }
+      return orig.apply(this,args);
+    };
+  });
 })();
 </script>
 </body>
